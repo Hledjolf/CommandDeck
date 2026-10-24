@@ -16,6 +16,7 @@ import commanddeck.command.Level;
 import commanddeck.command.Preset;
 import commanddeck.command.Variant;
 import commanddeck.hytale.HytaleLines;
+import commanddeck.hytale.RunText;
 import commanddeck.hytale.window.MacroShelf.Scope;
 import commanddeck.json.Json;
 import commanddeck.macro.Macro;
@@ -347,6 +348,15 @@ public final class DeckWindow {
         return String.valueOf(gen).equals(str(data.get("Gen")));
     }
 
+    /** Run or Add to macro on a line that can't be sent: the preview note already says why, so the status
+     *  line only says that nothing was sent, instead of repeating the reason under it. */
+    private void notSent(UiOps ops) {
+        renderPreview(ops);
+        setStatus(ops, NOT_SENT);
+    }
+
+    static final String NOT_SENT = "Not sent. The message above says what to change.";
+
     private void stale(UiOps ops) {
         setStatus(ops, "The window was redrawn before that click arrived. Please click again.");
     }
@@ -431,7 +441,7 @@ public final class DeckWindow {
             for (int i = 0; i < entries.size(); i++) listRow(ops, i, entries.get(i)[1], entries.get(i)[0].equals(macroKey), entries.get(i)[0]);
             ops.text("#Count", (entries.size() - 1) + " macros and presets");
         } else {
-            ops.text("#Count", runs().size() + " runs going");
+            ops.text("#Count", RunText.count(runs().size(), "run") + " going");
         }
     }
 
@@ -937,7 +947,7 @@ public final class DeckWindow {
         if (c == null) return;
         HytaleLines.Built b = buildLine();
         if (!b.sendable()) {
-            setStatus(ops, problemText(b.unsendable()));
+            notSent(ops);
             return;
         }
         if (c.level() == Level.RAW) host.prefs().remember(host.presser().id(), c.name(), rawText.strip());
@@ -1028,7 +1038,7 @@ public final class DeckWindow {
     private void addToMacro(UiOps ops) {
         HytaleLines.Built b = buildLine();
         if (!b.sendable()) {
-            setStatus(ops, problemText(b.unsendable()));
+            notSent(ops);
             return;
         }
         if (draft != null && draftReadOnly && dirty) {
@@ -1456,9 +1466,7 @@ public final class DeckWindow {
             rows.add(new Row(RowKind.NOTE, null));
             ops.append("#Rows", RUN_ROW);
             String sel = "#Rows[" + r + "]";
-            ops.text(sel + " #Text", "Run " + s.runId() + (s.macroId() == null ? "" : ", " + s.macroId()) + ": " + s.state().name().toLowerCase(Locale.ROOT)
-                + ", " + s.stepsCompleted() + " steps, at " + (s.currentPath() == null ? "-" : s.currentPath())
-                + (s.source() == null ? "" : ", from " + s.source()));
+            ops.text(sel + " #Text", RunText.line(s));
             ops.bind(sel + " #Stop", "Activating", Map.of("Action", "stopRun", "Run", s.runId()));
         }
         if (list.isEmpty()) note(ops, "No runs going.");

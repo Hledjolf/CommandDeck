@@ -29,11 +29,18 @@ Group {
     }
   }
 
-  // Under the field, so a long hint wraps across the row's width and the row grows with it.
-  Label #Hint {
-    Text: "";
-    Visible: false;
-    Anchor: (Left: 212, Top: 2);
-    Style: (FontSize: 13, TextColor: #878e9c, Wrap: true);
+  // Under the field, so a long hint wraps across the row's width and the row grows with it. The indent is
+  // the group's padding, not the label's Left anchor: with the anchor, the row was measured for the full
+  // width, the text wrapped narrower, and its second line went under the next row.
+  Group {
+    LayoutMode: Top;
+    Padding: (Left: 212);
+
+    Label #Hint {
+      Text: "";
+      Visible: false;
+      Anchor: (Top: 2);
+      Style: (FontSize: 13, TextColor: #878e9c, Wrap: true);
+    }
   }
 }

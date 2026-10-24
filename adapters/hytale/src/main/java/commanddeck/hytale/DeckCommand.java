@@ -192,8 +192,7 @@ final class DeckCommand extends AbstractAsyncCommand {
             out.add("You have no runs going.");
         } else {
             for (RunStatus r : runs) {
-                out.add("Run " + r.runId() + (r.macroId() == null ? "" : " (" + r.macroId() + ")") + ": " + r.stepsCompleted() + " steps, at "
-                    + r.currentPath());
+                out.add(RunText.line(r));
             }
         }
     }
