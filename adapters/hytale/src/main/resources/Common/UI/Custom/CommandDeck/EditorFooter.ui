@@ -1,4 +1,5 @@
-// The macro editor's buttons: add a step of each kind, then Delete, Run and Save.
+// The macro editor's buttons: add a step of each kind, then Delete, Run and Save. They add up to 786 pixels,
+// inside the right pane's ~806: Save at 170 ran off the window's edge.
 $C = "../Common.ui";
 
 Group {
@@ -22,7 +23,7 @@ Group {
 
   $C.@SmallSecondaryTextButton #AddSequence {
     @Text = "+ Group";
-    @Anchor = (Width: 100, Top: 4, Right: 12);
+    @Anchor = (Width: 100, Top: 4, Right: 8);
   }
 
   Group {
@@ -31,7 +32,7 @@ Group {
 
   $C.@SecondaryTextButton #Delete {
     @Text = "Delete";
-    @Anchor = (Right: 8, Width: 120);
+    @Anchor = (Right: 8, Width: 110);
   }
 
   $C.@SecondaryTextButton #RunMacro {
@@ -41,6 +42,6 @@ Group {
 
   $C.@TextButton #Save {
     @Text = "Save";
-    @Anchor = (Width: 170);
+    @Anchor = (Width: 110);
   }
 }
