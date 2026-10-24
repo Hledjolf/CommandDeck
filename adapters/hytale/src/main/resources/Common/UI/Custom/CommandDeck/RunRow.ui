@@ -1,0 +1,18 @@
+// One run going now, with its Stop button. No fixed height: a long description wraps and the row grows.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Bottom: 4);
+
+  Label #Text {
+    Text: "";
+    FlexWeight: 1;
+    Style: (FontSize: 14, TextColor: #c9d1d9, VerticalAlignment: Center, Wrap: true);
+  }
+
+  $C.@SmallSecondaryTextButton #Stop {
+    @Text = "Stop";
+    @Anchor = (Width: 90, Top: 4, Left: 8);
+  }
+}

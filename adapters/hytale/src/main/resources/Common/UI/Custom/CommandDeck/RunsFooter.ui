@@ -1,0 +1,17 @@
+// The runs tab's buttons: Refresh, and Stop all for operators.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Right;
+  Anchor: (Height: 44);
+
+  $C.@SecondaryTextButton #StopAll {
+    @Text = "Stop all";
+    @Anchor = (Left: 8, Width: 160);
+  }
+
+  $C.@SecondaryTextButton #Refresh {
+    @Text = "Refresh";
+    @Anchor = (Left: 8, Width: 160);
+  }
+}

@@ -1,0 +1,46 @@
+// The macro editor's buttons: add a step of each kind, then Delete, Run and Save.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Height: 44);
+
+  $C.@SmallSecondaryTextButton #AddCommand {
+    @Text = "+ Command";
+    @Anchor = (Width: 120, Top: 4, Right: 4);
+  }
+
+  $C.@SmallSecondaryTextButton #AddWait {
+    @Text = "+ Wait";
+    @Anchor = (Width: 90, Top: 4, Right: 4);
+  }
+
+  $C.@SmallSecondaryTextButton #AddRepeat {
+    @Text = "+ Repeat";
+    @Anchor = (Width: 110, Top: 4, Right: 4);
+  }
+
+  $C.@SmallSecondaryTextButton #AddSequence {
+    @Text = "+ Group";
+    @Anchor = (Width: 100, Top: 4, Right: 12);
+  }
+
+  Group {
+    FlexWeight: 1;
+  }
+
+  $C.@SecondaryTextButton #Delete {
+    @Text = "Delete";
+    @Anchor = (Right: 8, Width: 120);
+  }
+
+  $C.@SecondaryTextButton #RunMacro {
+    @Text = "Run";
+    @Anchor = (Right: 8, Width: 110);
+  }
+
+  $C.@TextButton #Save {
+    @Text = "Save";
+    @Anchor = (Width: 170);
+  }
+}

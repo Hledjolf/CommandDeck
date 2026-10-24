@@ -1,0 +1,30 @@
+# Allow-list: the repo holds only what builds and installs the mod.
+# Specs, tools, tests, the probe and the design docs stay private (local only). template/ is the public
+# sidecar spec for mod authors.
+/*
+!/.gitignore
+!/.gitattributes
+!/LICENSE
+!/README.md
+!/CHANGELOG.md
+!/build.gradle.kts
+!/settings.gradle.kts
+!/gradle.properties
+!/gradlew
+!/gradlew.bat
+!/gradle/
+!/template/
+!/core/
+/core/*
+!/core/src/
+!/core/build.gradle.kts
+/core/src/*
+!/core/src/main/
+!/adapters/
+/adapters/*
+!/adapters/hytale/
+/adapters/hytale/*
+!/adapters/hytale/src/
+!/adapters/hytale/build.gradle.kts
+/adapters/hytale/src/*
+!/adapters/hytale/src/main/

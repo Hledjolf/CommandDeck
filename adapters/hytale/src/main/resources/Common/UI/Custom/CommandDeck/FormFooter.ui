@@ -1,0 +1,23 @@
+// Run, Add to macro and Favorite, under a command's form. Re-appended on every redraw, so the field values
+// that Run captures match the rows.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Right;
+  Anchor: (Height: 44);
+
+  $C.@TextButton #Run {
+    @Text = "Run";
+    @Anchor = (Left: 8, Width: 150);
+  }
+
+  $C.@SecondaryTextButton #AddToMacro {
+    @Text = "Add to macro";
+    @Anchor = (Left: 8, Width: 200);
+  }
+
+  $C.@SecondaryTextButton #Favorite {
+    @Text = "Favorite";
+    @Anchor = (Left: 8, Width: 170);
+  }
+}

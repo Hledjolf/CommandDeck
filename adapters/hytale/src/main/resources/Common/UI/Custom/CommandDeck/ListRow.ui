@@ -1,0 +1,12 @@
+// One entry in the list on the left: a command, a macro or a preset. The selected one is disabled.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Height: 34, Bottom: 3);
+
+  $C.@SmallSecondaryTextButton #Button {
+    @Text = "";
+    FlexWeight: 1;
+  }
+}

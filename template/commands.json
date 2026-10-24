@@ -1,0 +1,30 @@
+{
+  "format": "commanddeck.commands",
+  "format_version": "1.0",
+  "mod": { "id": "Hledjolf:CalendarSeasons", "name": "Calendar and Seasons", "version": "1.2.0" },
+  "commands": [
+    {
+      "name": "calendar set day",
+      "label": "Set the day",
+      "description": "Jumps the calendar to a day of the year. Seasons follow the day.",
+      "category": "World",
+      "danger": "confirm",
+      "permission": "calendar.admin",
+      "args": [
+        { "name": "day", "type": "int", "min": 1, "max": 120, "description": "Day of the year, 1 to 120 with the default calendar." }
+      ],
+      "examples": [ { "line": "/calendar set day 90", "explanation": "Last day of Winter." } ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "jump-to-spring",
+      "name": "Jump to Spring",
+      "category": "World",
+      "macro": { "type": "sequence", "steps": [
+        { "type": "command", "line": "/calendar set day 90" },
+        { "type": "wait", "ticks": 20 },
+        { "type": "command", "line": "/calendar set day 91" } ] }
+    }
+  ]
+}

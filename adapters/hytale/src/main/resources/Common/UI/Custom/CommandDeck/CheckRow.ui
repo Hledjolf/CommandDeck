@@ -1,0 +1,34 @@
+// A true or false field: a flag in a form, or "ask before running" in the macro editor. No fixed height:
+// the row grows with a wrapped label or hint.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Bottom: 6);
+
+  Group {
+    LayoutMode: Left;
+
+    Label #Label {
+      Text: "";
+      Anchor: (Width: 200, Right: 12);
+      Style: (...$C.@DefaultLabelStyle, VerticalAlignment: Center, Wrap: true);
+    }
+
+    Group {
+      Anchor: (Width: 40, Height: 40);
+
+      $C.@CheckBox #Input {
+        Anchor: (Width: 26, Height: 26, Left: 0, Top: 7);
+      }
+    }
+  }
+
+  // Under the field, so a long hint wraps across the row's width and the row grows with it.
+  Label #Hint {
+    Text: "";
+    Visible: false;
+    Anchor: (Left: 212, Top: 2);
+    Style: (FontSize: 13, TextColor: #878e9c, Wrap: true);
+  }
+}

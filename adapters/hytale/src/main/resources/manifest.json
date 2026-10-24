@@ -1,0 +1,13 @@
+{
+  "Group": "Hledjolf",
+  "Name": "CommandDeck",
+  "Version": "${version}",
+  "Description": "An in-game command browser and macro builder: run any command from a form, and chain commands into macros with repeats and waits.",
+  "Authors": [
+    { "Name": "Hledjolf" }
+  ],
+  "Main": "commanddeck.hytale.CommandDeckPlugin",
+  "ServerVersion": "*",
+  "IncludesAssetPack": true,
+  "Dependencies": {}
+}

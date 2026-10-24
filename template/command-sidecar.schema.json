@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hledjolf:commanddeck:command-sidecar:1.0",
+  "title": "CommandDeck command sidecar",
+  "type": "object",
+  "required": [
+    "format",
+    "format_version",
+    "mod",
+    "commands"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "commanddeck.commands"
+    },
+    "format_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$"
+    },
+    "mod": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "presets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/preset"
+      }
+    }
+  },
+  "$defs": {
+    "arg": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "greedy_string",
+            "int",
+            "float",
+            "bool",
+            "enum",
+            "player",
+            "item",
+            "block",
+            "entity",
+            "position",
+            "duration"
+          ],
+          "description": "greedy_string takes the rest of the line. position is three numbers or placeholders."
+        },
+        "style": {
+          "enum": [
+            "positional",
+            "named",
+            "flag"
+          ],
+          "default": "positional",
+          "x-since": "1.0",
+          "description": "positional: by place in the line. named: --name value. flag: --name on its own, type bool."
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "default": {},
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "step": {
+          "type": "number"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Allowed values for type enum."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "placeholders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether {self}, {target}, {x} etc. may be used here."
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]+( [A-Za-z0-9_.:-]+)*$",
+          "description": "Command name without the slash. A subcommand is written with a space: 'calendar set'."
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "danger": {
+          "enum": [
+            "none",
+            "confirm",
+            "save_risk"
+          ],
+          "default": "none",
+          "description": "confirm: ask before running. save_risk: ask, and warn that it can damage a save."
+        },
+        "permission": {
+          "type": "string",
+          "description": "Permission node the game checks, if known. Informational; the game still decides."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/arg"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "x-since": "1.0",
+          "description": "Other forms of the same command, each with its own arguments (overloads). The command's own args are the main form.",
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "line"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "line": {
+                "type": "string",
+                "description": "Written exactly as a player would type it in chat."
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hidden": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "args"
+      ],
+      "additionalProperties": false,
+      "x-since": "1.0",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Shown in the form's variant picker, e.g. 'To a player'."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/arg"
+          }
+        }
+      }
+    },
+    "preset": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "macro"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "macro": {
+          "type": "object",
+          "description": "A macro body node: see \"Preset macros\" in README.md."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+// A text field in a form or the macro editor. No fixed height: the row grows with a wrapped label or hint,
+// as the game's own field rows do.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Bottom: 6);
+
+  Group {
+    LayoutMode: Left;
+
+    Label #Label {
+      Text: "";
+      Anchor: (Width: 200, Right: 12);
+      Style: (...$C.@DefaultLabelStyle, VerticalAlignment: Center, Wrap: true);
+    }
+
+    $C.@TextField #Input {
+      @Anchor = (Right: 4);
+      FlexWeight: 1;
+    }
+  }
+
+  // Under the field, so a long hint wraps across the row's width and the row grows with it.
+  Label #Hint {
+    Text: "";
+    Visible: false;
+    Anchor: (Left: 212, Top: 2);
+    Style: (FontSize: 13, TextColor: #878e9c, Wrap: true);
+  }
+}

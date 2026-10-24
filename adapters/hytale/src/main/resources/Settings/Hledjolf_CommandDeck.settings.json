@@ -1,0 +1,97 @@
+{
+  "format": 1,
+  "plugin": "Hledjolf:CommandDeck",
+  "config": "config.json",
+  "sections": [
+    { "id": "access", "label": "Access", "description": "Who may use CommandDeck. The game still checks every command as the player who runs it." },
+    { "id": "limits", "label": "Macro limits", "description": "Every run, from the window, /deck or another mod, keeps to these." },
+    { "id": "sending", "label": "Sending commands" }
+  ],
+  "keys": {
+    "Enabled": {
+      "label": "Commands enabled",
+      "description": "Off: no new run starts, from the window, /deck or another mod. Runs already going keep going.",
+      "section": "access",
+      "type": "bool",
+      "default": true,
+      "restart": false
+    },
+    "EveryoneInSingleplayer": {
+      "label": "Everyone may use it in singleplayer",
+      "description": "In a singleplayer world, every player may use CommandDeck and save their own macros, without the commanddeck.use permission.",
+      "section": "access",
+      "type": "bool",
+      "default": true,
+      "restart": false
+    },
+    "MaxIterations": {
+      "label": "Most repeats",
+      "description": "The highest count a repeat may have.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 100000,
+      "default": 100,
+      "restart": false
+    },
+    "MaxDepth": {
+      "label": "Deepest nesting",
+      "description": "How many repeats and groups may sit inside each other.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 64,
+      "default": 8,
+      "restart": false
+    },
+    "MaxRuntimeSeconds": {
+      "label": "Longest run (seconds)",
+      "description": "A run that takes longer stops before its next step.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 86400,
+      "step": 30,
+      "default": 300,
+      "restart": false
+    },
+    "StepsPerTick": {
+      "label": "Steps per tick",
+      "description": "How many commands one run may send in a single tick (30 ticks a second).",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 100,
+      "default": 1,
+      "restart": false
+    },
+    "MaxRunningPerPlayer": {
+      "label": "Runs at once per player",
+      "description": "How many runs one player may have going at the same time.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 100,
+      "default": 1,
+      "restart": false
+    },
+    "PlainSender": {
+      "label": "Plain sending",
+      "description": "Send commands through the server's own handler. CommandDeck then can't see refusals or replies, so every step is marked uncertain. Use it only if a mod's commands misbehave.",
+      "section": "sending",
+      "type": "bool",
+      "default": false,
+      "restart": false
+    },
+    "CommandTimeoutSeconds": {
+      "label": "Wait for a command (seconds)",
+      "description": "A command that hasn't finished after this long counts as sent, marked uncertain, and the run moves on.",
+      "section": "sending",
+      "type": "int",
+      "min": 1,
+      "max": 600,
+      "default": 10,
+      "restart": false
+    }
+  }
+}
