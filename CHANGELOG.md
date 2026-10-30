@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 (not released yet)
+## 1.1.0 (2026-10-30)
 
 - **Run for another player (integration API 1.1):** another mod can name a target for a run, and `{target}` is filled with that player's name. The commands still run as the player who pressed the button, with their own permissions. Naming someone else needs the new `commanddeck.run_others` permission; a target who isn't online, or who leaves during the run, stops it. The confirmation covers the target, and `runs.log` records it.
 - **List what a player can run (integration API 1.1):** `Deck.macros(presser, category)` returns a player's own macros, the server's macros and the presets, in the order `/deck run` looks them up, so other mods can build their own buttons.
@@ -14,6 +14,7 @@
 - **Your own macros that need a permission you don't have** are shown, marked with it, and can be deleted, but not run or changed.
 - **Sidecars:** a mistake in one command or preset now skips only that entry, with a warning in the server log, instead of the whole sidecar.
 - **The list is in blocks, each in alphabetical order.** Commands are grouped under Favorites, No permission, and their description level. Macros and presets are grouped by category, headings in alphabetical order, with "Other" last for those without one. The buttons show just the name, and a name too long for one line wraps onto the next instead of being cut off.
+- **Whole numbers beyond ±9,007,199,254,740,992** in a macro or sidecar are refused, naming the field, instead of being read approximately.
 - Condition loops and calling other macros are now planned for 1.2; a macro that uses them is refused with "needs CommandDeck 1.2".
 
 ## 1.0.0 (2026-10-24) – first release

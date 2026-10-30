@@ -4,7 +4,7 @@
 
 Every button shows the exact command line it runs, so the window teaches the commands instead of hiding them.
 
-Status: **1.0.0**, the first release. Tested on Hytale server **0.7.4**.
+Status: **1.1.0**. Tested on Hytale server **0.7.5**.
 
 ## What it does
 
@@ -29,7 +29,7 @@ Status: **1.0.0**, the first release. Tested on Hytale server **0.7.4**.
 
 ## Install
 
-1. Put `CommandDeck-1.0.0.jar` in your server's `mods` folder (singleplayer: `%APPDATA%\Hytale\UserData\Mods\`).
+1. Put `CommandDeck-1.1.0.jar` in your server's `mods` folder (singleplayer: `%APPDATA%\Hytale\UserData\Mods\`).
 2. Nothing else is needed.
 3. Type `/deck`.
 
@@ -38,7 +38,7 @@ Status: **1.0.0**, the first release. Tested on Hytale server **0.7.4**.
 | Command | What it does |
 | --- | --- |
 | `/deck` | Opens the window |
-| `/deck run <id>` | Runs one of your macros, a server macro or a preset |
+| `/deck run <id>` | Runs one of your macros, a server macro or a preset; `player:`, `server:` or `preset:<mod id>/` picks one when ids collide |
 | `/deck confirm` | Runs what's waiting for your confirmation (within 60 seconds) |
 | `/deck stop` | Stops your runs |
 | `/deck stop all` | Stops everyone's runs (operators) |
@@ -78,10 +78,10 @@ Saved data lives next to it: `macros/server/` (the server's macros), `macros/pla
 
 ## Compatibility
 
-- Hytale server **0.7.4**.
+- Hytale server **0.7.5**.
 - Dedicated servers and singleplayer.
 - One jar, no dependencies.
-- Macro steps in 1.0.0: command, sequence, repeat and wait. Loops on a condition and calling other macros are not in this version.
+- Macro steps in 1.1.0: command, sequence, repeat and wait. Loops on a condition and calling other macros are planned for 1.2.
 
 ## For mod authors
 
