@@ -22,7 +22,7 @@ CommandDeck turns every command in the game into a button: a form with a field p
 ## Where CommandDeck looks
 
 - **Your mod:** `commanddeck/commands.json` inside the mod.
-- **A server owner's override:** `sidecars/<mod id>.json` in CommandDeck's data folder. On Hytale that's `mods/Hledjolf_CommandDeck/sidecars/`, and the `:` in a mod id is written `_`, since file names can't hold it: `Hledjolf_CalendarSeasons.json`. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
+- **A server owner's override:** any `.json` file in `sidecars/` in CommandDeck's data folder (on Hytale `mods/Hledjolf_CommandDeck/sidecars/`). The file's own `mod.id` says which mod it's for, so the name doesn't matter. By convention it's the mod id with `:` written as `_`: `Hledjolf_CalendarSeasons.json`. If two files are for the same mod, the one whose name sorts last wins. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
 - Sidecars are read when the game starts and on `/deck reload`.
 
 ## Three description levels

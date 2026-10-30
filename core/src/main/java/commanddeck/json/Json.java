@@ -1,6 +1,5 @@
 package commanddeck.json;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -211,7 +210,8 @@ public final class Json {
                 try {
                     return Long.parseLong(t);
                 } catch (NumberFormatException tooBig) {
-                    return new BigDecimal(t).doubleValue();
+                    // Past a long either way: still outside ±2^53, so Checked.inRange refuses it.
+                    return t.startsWith("-") ? Long.MIN_VALUE : Long.MAX_VALUE;
                 }
             }
             return Double.parseDouble(t);

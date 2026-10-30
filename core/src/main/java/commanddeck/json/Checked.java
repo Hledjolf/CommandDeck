@@ -67,6 +67,24 @@ public final class Checked {
         return m.containsKey(key) ? bool(m.get(key), at + "/" + key) : otherwise;
     }
 
+    /** The largest integer every core reads exactly, 2^53 (specs README, "Integers in documents"). */
+    public static final long MAX_SAFE = 9007199254740992L;
+
+    /** Refuses the first integer outside ±2^53 in a whole document, in reading order. */
+    public static void inRange(Object v, String at) {
+        if (v instanceof Long n) {
+            if (n > MAX_SAFE || n < -MAX_SAFE) throw new Invalid(at, "whole number outside ±2^53");
+        } else if (v instanceof Map<?, ?> m) {
+            for (Map.Entry<?, ?> e : m.entrySet()) inRange(e.getValue(), at + "/" + pointerToken(e.getKey().toString()));
+        } else if (v instanceof List<?> a) {
+            for (int i = 0; i < a.size(); i++) inRange(a.get(i), at + "/" + i);
+        }
+    }
+
+    private static String pointerToken(String key) {
+        return key.replace("~", "~0").replace("/", "~1");
+    }
+
     public static long integer(Object v, String at) {
         if (!(v instanceof Long)) throw new Invalid(at, "expected a whole number, got " + Json.typeName(v));
         return (Long) v;

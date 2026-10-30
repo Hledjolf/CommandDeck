@@ -75,6 +75,10 @@ public final class SidecarReader {
     private static Sidecar sidecar(Object json) {
         Map<String, Object> m = object(json, "");
         only(m, DOC_KEYS, "");
+        // Commands and presets are checked one by one below, so a bad number skips only its entry.
+        for (Map.Entry<String, Object> e : m.entrySet()) {
+            if (!e.getKey().equals("commands") && !e.getKey().equals("presets")) Checked.inRange(e.getValue(), "/" + e.getKey());
+        }
         if (!"commanddeck.commands".equals(need(m, "format", ""))) {
             throw new Checked.Invalid("/format", "format must be \"commanddeck.commands\"");
         }
@@ -112,6 +116,7 @@ public final class SidecarReader {
     }
 
     private static CommandInfo command(Object json, String at) {
+        Checked.inRange(json, at);
         Map<String, Object> m = object(json, at);
         only(m, COMMAND_KEYS, at);
         String name = string(need(m, "name", at), at + "/name");
@@ -195,6 +200,7 @@ public final class SidecarReader {
     }
 
     private static Preset preset(Object json, String at, int minor) {
+        Checked.inRange(json, at);
         Map<String, Object> m = object(json, at);
         only(m, PRESET_KEYS, at);
         String id = string(need(m, "id", at), at + "/id");

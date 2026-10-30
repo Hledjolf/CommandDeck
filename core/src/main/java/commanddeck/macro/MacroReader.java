@@ -55,6 +55,7 @@ public final class MacroReader {
 
     public static Result<Macro> readDocument(Object json) {
         try {
+            Checked.inRange(json, "");
             Map<String, Object> m = object(json, "");
             only(m, DOC_KEYS, "");
             Object format = need(m, "format", "");
@@ -97,6 +98,7 @@ public final class MacroReader {
     /** A body node on its own: a preset's {@code macro}, or a {@code MACRO_JSON} item from the integration API. */
     public static Result<Node> readNode(Object json) {
         try {
+            Checked.inRange(json, "");
             return new Result<>(node(json, ""), null);
         } catch (Refused r) {
             return new Result<>(null, r.problem);
