@@ -24,7 +24,12 @@ public final class RunLog {
     }
 
     public void started(String runId, String presser, String macroId, String source) {
-        out.append("run " + runId + " started by " + presser + " macro=" + (macroId == null ? "-" : macroId)
+        started(runId, presser, null, macroId, source);
+    }
+
+    /** {@code target} is null when the run is for the presser. */
+    public void started(String runId, String presser, String target, String macroId, String source) {
+        out.append("run " + runId + " started by " + presser + (target == null ? "" : " for " + target) + " macro=" + (macroId == null ? "-" : macroId)
             + " source=" + (source == null ? "-" : quote(source)));
     }
 

@@ -3,7 +3,7 @@
 plugins { base }
 
 // The dev build is <releaseVersion>-dev. `gradlew release` builds <releaseVersion> itself (see "release" below).
-val releaseVersion = "1.0.0"
+val releaseVersion = "1.1.0"
 version = if (hasProperty("releaseBuild")) releaseVersion else "$releaseVersion-dev"
 
 subprojects {

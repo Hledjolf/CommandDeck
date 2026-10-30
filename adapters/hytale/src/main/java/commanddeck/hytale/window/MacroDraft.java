@@ -50,7 +50,14 @@ public final class MacroDraft {
     public String id;
     public String name;
     public String description;
+    /** Groups the macro in lists (format 1.1), or null for none. */
+    public String category;
     public boolean dangerous;
+    /**
+     * The permission node a player needs to see or run the macro (format 1.1), or null. The editor has no
+     * field for it, so a copy of a preset keeps the preset's check and can't drop it.
+     */
+    public String permission;
     private final List<Step> steps = new ArrayList<>();
 
     public MacroDraft(String id, String name) {
@@ -61,7 +68,9 @@ public final class MacroDraft {
     public static MacroDraft of(Macro m) {
         MacroDraft d = new MacroDraft(m.id(), m.name());
         d.description = m.description();
+        d.category = m.category();
         d.dangerous = m.dangerous();
+        d.permission = m.permission();
         Node body = m.body();
         if (body instanceof Node.Sequence && ((Node.Sequence) body).note() == null) {
             for (Node n : ((Node.Sequence) body).steps()) d.flatten(n, 0);
@@ -73,7 +82,12 @@ public final class MacroDraft {
 
     /** A draft holding a preset's or another macro's steps, under a new id. */
     public static MacroDraft copyOf(String id, String name, Node body) {
-        MacroDraft d = of(new Macro("1.0", id, name, null, false, body));
+        return copyOf(id, name, body, null);
+    }
+
+    /** As {@link #copyOf(String, String, Node)}, keeping the original's {@code permission}. */
+    public static MacroDraft copyOf(String id, String name, Node body, String permission) {
+        MacroDraft d = of(new Macro("1.0", id, name, null, false, body, permission));
         d.id = id;
         return d;
     }
@@ -261,7 +275,9 @@ public final class MacroDraft {
         Built b = build();
         if (!b.ok()) throw new IllegalStateException(b.problem());
         String desc = description == null || description.isBlank() ? null : description;
-        return new Macro("1.0", id == null ? "" : id.trim(), name == null ? "" : name.trim(), desc, dangerous, b.body());
+        String cat = category == null || category.isBlank() ? null : category.trim();
+        return new Macro(permission == null && cat == null ? "1.0" : "1.1", id == null ? "" : id.trim(), name == null ? "" : name.trim(),
+            desc, dangerous, b.body(), permission, cat);
     }
 
     private static final class Bad extends RuntimeException {

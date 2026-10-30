@@ -5,7 +5,7 @@ import java.util.List;
 /** The integration API: run command lines and macros as a given player, with every
  * rule a button press in CommandDeck's window has. */
 public interface Deck {
-    String API_VERSION = "1.0";
+    String API_VERSION = "1.1";
 
     String apiVersion();
 
@@ -30,4 +30,14 @@ public interface Deck {
     String observe(Presser presser, RunListener listener);
 
     void unobserve(String observerId);
+
+    /**
+     * Since 1.1. What this presser can run by {@code MACRO_REF}: their own macros, then server macros, then
+     * presets, each id once, as a reference would resolve it, leaving out any whose {@code permission} the
+     * presser doesn't hold. {@code category} null means all; otherwise it is compared exactly. A snapshot: a
+     * later {@code check} decides. A default, so implementations written for 1.0 still compile.
+     */
+    default List<MacroInfo> macros(Presser presser, String category) {
+        return List.of();
+    }
 }

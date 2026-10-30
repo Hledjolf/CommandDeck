@@ -1,4 +1,4 @@
-# CommandDeck command sidecar (format 1.0)
+# CommandDeck command sidecar (format 1.1)
 
 CommandDeck turns every command in the game into a button: a form with a field per argument, help for each one, and a preview of the exact command line it will run. A **command sidecar** is a small JSON file your mod ships to make its commands into better buttons.
 
@@ -22,7 +22,7 @@ CommandDeck turns every command in the game into a button: a form with a field p
 ## Where CommandDeck looks
 
 - **Your mod:** `commanddeck/commands.json` inside the mod.
-- **A server owner's override:** `mods/Hledjolf_CommandDeck/sidecars/<mod-id>.json`. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
+- **A server owner's override:** `sidecars/<mod id>.json` in CommandDeck's data folder. On Hytale that's `mods/Hledjolf_CommandDeck/sidecars/`, and the `:` in a mod id is written `_`, since file names can't hold it: `Hledjolf_CalendarSeasons.json`. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
 - Sidecars are read when the game starts and on `/deck reload`.
 
 ## Three description levels
@@ -54,7 +54,7 @@ The game decides which commands exist. Your sidecar refines them.
 Top level:
 
 - `format`: always `"commanddeck.commands"`.
-- `format_version`: `"1.0"`.
+- `format_version`: `"1.0"`, or `"1.1"` if you use a 1.1 field (preset `permission`).
 - `mod`: `id` (required), `name`, `version`.
 - `commands[]`: your commands (below).
 - `presets[]`: ready-made macros (below). Optional.
@@ -112,14 +112,20 @@ Filled in when the command runs, from the player who pressed the button:
 | --- | --- |
 | `{self}` | The player's name |
 | `{target}` | The player chosen in the window, or the player who pressed the button |
-| `{x} {y} {z}` | The player's position, in whole blocks by default |
+| `{x} {y} {z}` | The player's position, in the game's own units (whole blocks on Hytale) |
 | `{look}` | What the player is looking at, where the game supports it |
 
 An unknown placeholder, or one the game can't fill, stops the command with a message. It's never sent as text.
 
 ## Presets
 
-A preset is a ready-made macro your mod ships: a button that runs several commands. Each entry in `presets[]` has `id` (required: lowercase letters, digits, `_` and `-`), `name` (required), `description`, `category`, and `macro` (required).
+A preset is a ready-made macro your mod ships: a button that runs several commands. Each entry in `presets[]` has `id` (required: lowercase letters, digits, `_` and `-`), `name` (required), `description`, `category`, `permission` (1.1, optional), and `macro` (required).
+
+**`permission` (since 1.1):** a permission node a player must hold to see or run the preset, for example `"permission": "cheatmenu.use"`. Players without it don't see the preset, and running it is refused with a message. It only adds a check: the game still checks every command, and the field never grants anything. Operators and the singleplayer world owner pass. When a player saves the preset as their own, the copy keeps the check, and they can't remove it.
+
+**Categories:** CommandDeck's Macros tab groups presets under a heading per `category`, so give related presets the same one (for example `My Mod: Items`).
+
+**Naming a preset from another mod (since 1.1):** a preset's full reference is `preset:<your mod id>/<preset id>`, for example `preset:MyGroup:MyMod/jump-to-spring`. Other mods (a gift catalog, a test plan) should use that form, so two mods' presets with the same id never get mixed up. People typing `/deck run` can still use the plain id.
 
 ### Preset macros
 
@@ -144,7 +150,9 @@ How presets run:
 
 ## Versions
 
-`format_version` is `major.minor`. A minor version only adds optional things, so a 1.0 sidecar stays valid in every 1.x. If a preset uses a step type newer than the installed CommandDeck understands, that preset is refused with a clear message. CommandDeck never guesses.
+`format_version` is `major.minor`. A minor version only adds optional things, so a 1.0 sidecar stays valid in every 1.x.
+
+**Using a newer field needs a newer CommandDeck.** CommandDeck 1.0 refuses a sidecar with a field it doesn't know, so a sidecar that uses `permission` won't load on 1.0 at all. If you use it, set `format_version` to `"1.1"` and require CommandDeck 1.1 or later in your mod's manifest (on Hytale, `"Hledjolf:CommandDeck": ">=1.1.0"`). From CommandDeck 1.1 on, a problem in one command or preset skips only that entry, with a warning in the log, and the rest of the sidecar loads. If a preset uses a step type newer than the installed CommandDeck understands, that preset is refused with a clear message. CommandDeck never guesses.
 
 ## License
 

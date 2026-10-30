@@ -75,6 +75,16 @@
       "default": 1,
       "restart": false
     },
+    "MaxRunningForConsole": {
+      "label": "Runs at once for the console",
+      "description": "How many runs the server console may have going at the same time. Other mods use the console to act for the server, so it has its own limit.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 100,
+      "default": 4,
+      "restart": false
+    },
     "PlainSender": {
       "label": "Plain sending",
       "description": "Send commands through the server's own handler. CommandDeck then can't see refusals or replies, so every step is marked uncertain. Use it only if a mod's commands misbehave.",

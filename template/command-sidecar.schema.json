@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:hledjolf:commanddeck:command-sidecar:1.0",
+  "$id": "urn:hledjolf:commanddeck:command-sidecar:1.1",
   "title": "CommandDeck command sidecar",
   "type": "object",
   "required": [
@@ -250,6 +250,12 @@
         },
         "category": {
           "type": "string"
+        },
+        "permission": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A permission node a player must hold to see or run this preset. Adds a check, grants nothing. Since 1.1.",
+          "x-since": "1.1"
         },
         "macro": {
           "type": "object",

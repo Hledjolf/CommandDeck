@@ -50,7 +50,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
     private FileMacros macros;
     private HytaleAssets assets;
     private HytaleGame game;
-    private DeckService deck;
+    private LockedDeck deck;
     private volatile CommandCatalog catalog;
     private volatile HytaleCommands commands;
     private volatile ScheduledFuture<?> ticker;
@@ -71,7 +71,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
         macros = new FileMacros(data, getLogger(), () -> settings.limits());
         prefs = new FilePrefs(data, getLogger());
         assets = new HytaleAssets(getLogger());
-        game = new HytaleGame(settings, () -> catalog, new HytaleEscaper.Shapes() {
+        game = new HytaleGame(settings, () -> catalog, () -> commands, new HytaleEscaper.Shapes() {
             @Override
             public int tokens(String command, int form, String arg) {
                 HytaleCommands c = commands;
@@ -87,7 +87,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
             }
         }, getLogger());
         RunLog runLog = new RunLog(new RunsFile(data.resolve("runs.log"), getLogger()));
-        deck = new DeckService(game, macros, () -> catalog, runLog, System::currentTimeMillis);
+        deck = new LockedDeck(new DeckService(game, macros, () -> catalog, runLog, System::currentTimeMillis));
         applySettings();
         CommandDeckApi.publish(deck);
         instance = this;
@@ -208,7 +208,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
         }
 
         @Override
-        public DeckService deck() {
+        public LockedDeck deck() {
             return deck;
         }
 
@@ -287,7 +287,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
         }
     }
 
-    DeckService deck() {
+    LockedDeck deck() {
         return deck;
     }
 

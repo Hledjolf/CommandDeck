@@ -122,6 +122,16 @@ final class FileMacros implements MacroLibrary, MacroShelf {
         return out;
     }
 
+    @Override
+    public List<Macro> playerMacros(String presserId) {
+        return list(Scope.PLAYER, presserId);
+    }
+
+    @Override
+    public List<Macro> serverMacros() {
+        return list(Scope.SERVER, null);
+    }
+
     List<Macro> server() {
         return list(Scope.SERVER, null);
     }

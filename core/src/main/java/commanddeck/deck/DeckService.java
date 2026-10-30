@@ -2,6 +2,7 @@ package commanddeck.deck;
 
 import commanddeck.api.CheckResult;
 import commanddeck.api.Deck;
+import commanddeck.api.MacroInfo;
 import commanddeck.api.Presser;
 import commanddeck.api.PreviewLine;
 import commanddeck.api.Refusal;
@@ -12,6 +13,7 @@ import commanddeck.api.RunResult;
 import commanddeck.api.RunStatus;
 import commanddeck.api.StartResult;
 import commanddeck.api.StepEvent;
+import commanddeck.api.Target;
 import commanddeck.command.CommandCatalog;
 import commanddeck.command.CommandInfo;
 import commanddeck.command.Danger;
@@ -27,18 +29,22 @@ import commanddeck.run.MacroRunner;
 import commanddeck.run.RunLog;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
  * The deck: every run, whether from the window, {@code /deck run} or another mod, goes through here, with the
- * same checks, limits, confirmation and log. {@link #check}, {@link #start}, {@link #stop} and the status
- * calls are safe from any thread. Runs only advance in {@link #tick}, which the adapter calls once per game
- * tick on the tick thread, so a run's first step always comes after {@code start} has returned.
+ * same checks, limits, confirmation and log. Runs only advance in {@link #tick}, which the adapter calls once
+ * per game tick, so a run's first step always comes after {@code start} has returned.
+ *
+ * <p>Single-threaded, as every CommandDeck core is: it is called on
+ * one thread at a time and never blocks. The adapter makes it safe to call from any thread.
  */
 public final class DeckService implements Deck {
     static final long TOKEN_LIFETIME_MILLIS = 60_000;
@@ -55,10 +61,9 @@ public final class DeckService implements Deck {
     private final SecureRandom random = new SecureRandom();
     private final String idPrefix;
 
-    private volatile Limits limits = Limits.DEFAULTS;
-    private volatile boolean enabled = true;
+    private Limits limits = Limits.DEFAULTS;
+    private boolean enabled = true;
 
-    // Guarded by this.
     private final Map<String, Run> runs = new LinkedHashMap<>();
     private final Map<String, Token> tokens = new LinkedHashMap<>();
     private final Map<String, Observer> observers = new LinkedHashMap<>();
@@ -69,7 +74,7 @@ public final class DeckService implements Deck {
     private static final class Observer {
         final String presserId;
         final RunListener listener;
-        volatile boolean active = true;
+        boolean active = true;
 
         Observer(String presserId, RunListener listener) {
             this.presserId = presserId;
@@ -135,22 +140,28 @@ public final class DeckService implements Deck {
 
     private static final class Run {
         final Presser presser;
+        /** Null when the run is for the presser. */
+        final String targetId;
         final MacroRunner runner;
         long finishedAtMillis = -1;
 
-        Run(Presser presser, MacroRunner runner) {
+        Run(Presser presser, String targetId, MacroRunner runner) {
             this.presser = presser;
+            this.targetId = targetId;
             this.runner = runner;
         }
     }
 
     private record Token(String presserId, String request, long expiresAtMillis) {}
 
-    /** A checked request: either a refusal, or what would run and what it needs first. */
+    /**
+     * A checked request: either a refusal, or what would run and what it needs first. {@code targetId} and
+     * {@code targetName} are null when the run is for the presser.
+     */
     private record Prepared(Refusal refusal, Node body, String macroId, List<PreviewLine> preview, boolean needsConfirmation,
-                            String prompt, boolean saveRisk) {
+                            String prompt, boolean saveRisk, String targetId, String targetName) {
         static Prepared refused(Refusal r, List<PreviewLine> preview) {
-            return new Prepared(r, null, null, preview, false, null, false);
+            return new Prepared(r, null, null, preview, false, null, false, null, null);
         }
     }
 
@@ -191,10 +202,8 @@ public final class DeckService implements Deck {
         String token = null;
         if (p.needsConfirmation()) {
             token = newToken();
-            synchronized (this) {
-                purgeTokens(clock.getAsLong());
-                tokens.put(token, new Token(presser.id(), key(request), clock.getAsLong() + TOKEN_LIFETIME_MILLIS));
-            }
+            purgeTokens(clock.getAsLong());
+            tokens.put(token, new Token(presser.id(), key(request, p.targetId()), clock.getAsLong() + TOKEN_LIFETIME_MILLIS));
         }
         return new CheckResult(true, null, p.preview(), p.needsConfirmation(), p.prompt(), p.saveRisk(), token);
     }
@@ -203,52 +212,57 @@ public final class DeckService implements Deck {
     public StartResult start(Presser presser, RunRequest request, RunListener listener, String confirmToken) {
         Prepared p = prepare(presser, request);
         if (p.refusal() != null) return refuse(presser, p.refusal());
-        synchronized (this) {
-            int mine = 0;
-            for (Run r : runs.values()) {
-                if (!r.runner.finished() && r.presser.id().equals(presser.id())) mine++;
-            }
-            Limits l = limits;
-            if (mine >= l.maxRunningPerPlayer()) {
-                return refuse(presser, new Refusal("busy", presser.name() + " already has " + mine + " run"
-                    + (mine == 1 ? "" : "s") + " going; the limit is " + l.maxRunningPerPlayer(), "max_running_per_player=" + l.maxRunningPerPlayer()));
-            }
-            if (p.needsConfirmation()) {
-                if (confirmToken == null) {
-                    return refuse(presser, new Refusal("needs_confirmation", "This needs confirmation first: " + p.prompt(), null));
-                }
-                long now = clock.getAsLong();
-                purgeTokens(now);
-                Token t = tokens.get(confirmToken);
-                if (t == null || !t.presserId().equals(presser.id()) || !t.request().equals(key(request))) {
-                    return refuse(presser, new Refusal("confirmation_mismatch",
-                        "The confirmation has expired or was for a different request; check again", null));
-                }
-                tokens.remove(confirmToken);
-            }
-            String runId = idPrefix + "-" + nextId++;
-            List<Observer> watching = new ArrayList<>();
-            for (Observer o : observers.values()) {
-                if (o.presserId.equals(presser.id())) watching.add(o);
-            }
-            RunListener fanout = new Fanout(runId, "the starter", listener, List.copyOf(watching));
-            MacroRunner runner = new MacroRunner(runId, p.macroId(), request.source(), p.body(), l, game.sinkFor(presser),
-                new MacroRunner.ContextSource() {
-                    @Override
-                    public Placeholders.Context now() {
-                        return game.context(presser);
-                    }
-
-                    @Override
-                    public Placeholders.Escaper escaper() {
-                        return game.escaper();
-                    }
-                }, fanout, log);
-            runs.put(runId, new Run(presser, runner));
-            if (p.needsConfirmation()) log.confirmed(runId, label(presser), p.prompt());
-            log.started(runId, label(presser), p.macroId(), request.source());
-            return new StartResult(true, runId, null);
+        int mine = 0;
+        for (Run r : runs.values()) {
+            if (!r.runner.finished() && r.presser.id().equals(presser.id())) mine++;
         }
+        Limits l = limits;
+        // The console has its own limit, so mods acting for the server don't block each other at one run.
+        boolean console = game.isConsole(presser);
+        int max = console ? l.maxRunningConsole() : l.maxRunningPerPlayer();
+        if (mine >= max) {
+            return refuse(presser, new Refusal("busy", presser.name() + " already has " + mine + " run"
+                + (mine == 1 ? "" : "s") + " going; the limit is " + max, (console ? "max_running_console=" : "max_running_per_player=") + max));
+        }
+        if (p.needsConfirmation()) {
+            if (confirmToken == null) {
+                return refuse(presser, new Refusal("needs_confirmation", "This needs confirmation first: " + p.prompt(), null));
+            }
+            long now = clock.getAsLong();
+            purgeTokens(now);
+            Token t = tokens.get(confirmToken);
+            if (t == null || !t.presserId().equals(presser.id()) || !t.request().equals(key(request, p.targetId()))) {
+                return refuse(presser, new Refusal("confirmation_mismatch",
+                    "The confirmation has expired or was for a different request; check again", null));
+            }
+            tokens.remove(confirmToken);
+        }
+        String runId = idPrefix + "-" + nextId++;
+        List<Observer> watching = new ArrayList<>();
+        for (Observer o : observers.values()) {
+            if (o.presserId.equals(presser.id())) watching.add(o);
+        }
+        RunListener fanout = new Fanout(runId, "the starter", listener, List.copyOf(watching));
+        String targetId = p.targetId();
+        String targetName = p.targetName();
+        MacroRunner runner = new MacroRunner(runId, p.macroId(), request.source(), p.body(), l, game.sinkFor(presser),
+            new MacroRunner.ContextSource() {
+                @Override
+                public Placeholders.Context now() {
+                    if (targetId == null) return game.context(presser);
+                    String name = game.onlineName(targetId);
+                    return withTarget(game.context(presser), name != null ? name : targetName);
+                }
+
+                @Override
+                public Placeholders.Escaper escaper() {
+                    return game.escaper();
+                }
+            }, fanout, log);
+        runs.put(runId, new Run(presser, targetId, runner));
+        if (p.needsConfirmation()) log.confirmed(runId, label(presser), p.prompt());
+        log.started(runId, label(presser), targetId == null ? null : targetName + " (" + targetId + ")", p.macroId(), request.source());
+        return new StartResult(true, runId, null);
     }
 
     private StartResult refuse(Presser presser, Refusal r) {
@@ -265,6 +279,20 @@ public final class DeckService implements Deck {
         }
         if (!game.mayUse(presser)) {
             return Prepared.refused(new Refusal("no_permission", presser.name() + " may not use CommandDeck", null), List.of());
+        }
+        // The target only fills {target}; naming anyone but yourself needs the "run for others" permission.
+        String targetId = targetOf(presser, request);
+        String targetName = null;
+        if (targetId != null) {
+            if (!game.mayRunForOthers(presser)) {
+                return Prepared.refused(new Refusal("no_permission", presser.name() + " may not run commands for other players",
+                    "target=" + targetId), List.of());
+            }
+            targetName = game.onlineName(targetId);
+            if (targetName == null) {
+                String who = request.target().name() != null ? request.target().name() : targetId;
+                return Prepared.refused(new Refusal("target_offline", who + " isn't online", "target=" + targetId), List.of());
+            }
         }
         if (request == null || request.items() == null || request.items().isEmpty()) {
             return Prepared.refused(invalid("items", "Nothing to run"), List.of());
@@ -294,20 +322,15 @@ public final class DeckService implements Deck {
                     break;
                 }
                 case MACRO_REF: {
-                    String id = item.value();
-                    Macro m = macros.playerMacro(presser.id(), id);
-                    if (m == null) m = macros.serverMacro(id);
-                    if (m != null) {
-                        nodes.add(m.body());
-                        if (m.dangerous()) askFirst.add(m.name());
-                    } else {
-                        Preset preset = preset(cat, id);
-                        if (preset == null) {
-                            return Prepared.refused(new Refusal("unknown_macro", "No macro or preset called \"" + id + "\"" + where, id), List.of());
-                        }
-                        nodes.add(preset.macro());
+                    Found f = resolve(presser, cat, item.value(), i, where);
+                    if (f.refusal() != null) return Prepared.refused(f.refusal(), List.of());
+                    nodes.add(f.body());
+                    if (f.dangerous()) askFirst.add(f.name());
+                    if (!holds(presser, f.permission())) {
+                        return Prepared.refused(new Refusal("no_permission", presser.name() + " doesn't have permission to run " + f.name() + where,
+                            "permission=" + f.permission()), List.of());
                     }
-                    if (request.items().size() == 1) macroId = id;
+                    if (request.items().size() == 1) macroId = f.id();
                     break;
                 }
                 case MACRO_JSON: {
@@ -327,6 +350,7 @@ public final class DeckService implements Deck {
 
         Placeholders.Context ctx = game.context(presser);
         if (ctx == null) return Prepared.refused(new Refusal("player_offline", presser.name() + " isn't online", null), List.of());
+        if (targetId != null) ctx = withTarget(ctx, targetName);
         List<PreviewLine> preview = new ArrayList<>();
         Refusal first = null;
         boolean saveRisk = false;
@@ -342,7 +366,8 @@ public final class DeckService implements Deck {
                 continue;
             }
             Problem unsendable = game.checkLine(r.line());
-            preview.add(new PreviewLine(f.path(), r.line(), unsendable == null, unsendable == null ? null : unsendable.message()));
+            preview.add(new PreviewLine(f.path(), r.line(), unsendable == null, unsendable == null ? null : unsendable.message(),
+                game.permitted(presser, r.line())));
             if (unsendable != null && first == null) first = refusal(unsendable, "");
             if (!shown.contains(r.line())) shown.add(r.line());
             CommandInfo info = cat == null ? null : cat.match(r.line());
@@ -356,7 +381,27 @@ public final class DeckService implements Deck {
 
         boolean needs = !askFirst.isEmpty();
         String prompt = needs ? prompt(shown, askFirst, saveRisk) : null;
-        return new Prepared(null, body, macroId, List.copyOf(preview), needs, prompt, saveRisk);
+        return new Prepared(null, body, macroId, List.copyOf(preview), needs, prompt, saveRisk, targetId, targetName);
+    }
+
+    /** The request's target id, or null when it names nobody or the presser themselves. */
+    private static String targetOf(Presser presser, RunRequest request) {
+        Target t = request == null ? null : request.target();
+        if (t == null || t.id() == null || t.id().equals(presser.id())) return null;
+        return t.id();
+    }
+
+    private static Placeholders.Context withTarget(Placeholders.Context ctx, String targetName) {
+        if (ctx == null) return null;
+        return ctx.withTarget(targetName);
+    }
+
+    /**
+     * Whether the presser holds a macro's or preset's {@code permission}; true when there is none. Also for the
+     * window and {@code /deck list}, which hide what the presser can't run.
+     */
+    public boolean holds(Presser presser, String permission) {
+        return permission == null || game.holds(presser, permission);
     }
 
     /** For example {@code Runs /calendar set day 90. Ask first: Set the day.} */
@@ -370,13 +415,83 @@ public final class DeckService implements Deck {
         return b.toString();
     }
 
+    /** What a {@code MACRO_REF} names: a saved macro or a preset, or why it names nothing. */
+    private record Found(Refusal refusal, Node body, String id, String name, boolean dangerous, String permission) {
+        static Found refused(Refusal r) {
+            return new Found(r, null, null, null, false, null);
+        }
+
+        static Found of(Macro m) {
+            return new Found(null, m.body(), m.id(), m.name(), m.dangerous(), m.permission());
+        }
+
+        static Found of(Preset p) {
+            return new Found(null, p.macro(), p.id(), p.name(), false, p.permission());
+        }
+    }
+
+    /**
+     * A plain id is looked up in the presser's own macros, then the server's, then presets in sidecar order. A
+     * scoped reference ({@code player:<id>}, {@code server:<id>}, {@code preset:<mod id>/<id>}) names one. The
+     * scope is the text before the first ':'. A preset's mod id runs to the last '/', whatever the game's mod
+     * ids look like, because macro ids can't contain '/'.
+     */
+    private Found resolve(Presser presser, CommandCatalog cat, String ref, int item, String where) {
+        Refusal unknown = new Refusal("unknown_macro", "No macro or preset called \"" + ref + "\"" + where, ref);
+        int colon = ref.indexOf(':');
+        if (colon < 0) {
+            Macro m = macros.playerMacro(presser.id(), ref);
+            if (m == null) m = macros.serverMacro(ref);
+            if (m != null) return Found.of(m);
+            Preset p = firstPreset(cat, ref);
+            return p != null ? Found.of(p) : Found.refused(unknown);
+        }
+        String scope = ref.substring(0, colon);
+        String rest = ref.substring(colon + 1);
+        switch (scope) {
+            case "player": {
+                Macro m = macros.playerMacro(presser.id(), rest);
+                return m != null ? Found.of(m) : Found.refused(unknown);
+            }
+            case "server": {
+                Macro m = macros.serverMacro(rest);
+                return m != null ? Found.of(m) : Found.refused(unknown);
+            }
+            case "preset": {
+                int slash = rest.lastIndexOf('/');
+                if (slash <= 0 || slash == rest.length() - 1) {
+                    return Found.refused(invalid("items/" + item, "A preset reference looks like preset:<mod id>/<id>" + where));
+                }
+                Preset p = cat == null ? null : cat.presets().get(rest);
+                return p != null ? Found.of(p) : Found.refused(unknown);
+            }
+            default:
+                return Found.refused(invalid("items/" + item, "Unknown reference scope \"" + scope + "\": use player:, server: or preset:" + where));
+        }
+    }
+
     /** The first preset with this id, in sidecar order. */
-    private static Preset preset(CommandCatalog cat, String id) {
+    private static Preset firstPreset(CommandCatalog cat, String id) {
         if (cat == null) return null;
         for (Preset p : cat.presets().values()) {
             if (p.id().equals(id)) return p;
         }
         return null;
+    }
+
+    /**
+     * Whether running it will ask first ({@code MacroInfo.dangerous}): the macro is marked {@code dangerous}, or
+     * any of its commands has {@code confirm: true} or a sidecar {@code danger} of {@code confirm} or
+     * {@code save_risk}. Worked out from the nodes as written; {@code check} still decides.
+     */
+    private static boolean asksFirst(boolean dangerous, Node body, CommandCatalog cat) {
+        if (dangerous) return true;
+        for (Commands.Found f : Commands.inTreeOrder(body)) {
+            if (f.command().confirm()) return true;
+            CommandInfo info = cat == null ? null : cat.match(f.command().line());
+            if (info != null && info.danger() != Danger.NONE) return true;
+        }
+        return false;
     }
 
     private static Refusal invalid(String path, String message) {
@@ -402,11 +517,11 @@ public final class DeckService implements Deck {
         return new Refusal(p.code(), p.message() + where, detail);
     }
 
-    /** What a confirmation token is tied to: every item and the source. */
-    private static String key(RunRequest r) {
+    /** What a confirmation token is tied to: every item, the source and the target. */
+    private static String key(RunRequest r, String targetId) {
         StringBuilder b = new StringBuilder();
         for (RunItem i : r.items()) b.append(i.kind()).append('\u0000').append(i.value()).append('\u0001');
-        return b.append(r.source()).toString();
+        return b.append(r.source()).append('\u0002').append(targetId).toString();
     }
 
     private String newToken() {
@@ -431,12 +546,13 @@ public final class DeckService implements Deck {
      * One game tick, on the tick thread: every run takes its step. A run whose presser has left stops before
      * its next step ({@code player_offline}). Finished runs are forgotten after ten minutes.
      */
-    public synchronized void tick(long tick, long nowMillis) {
+    public void tick(long tick, long nowMillis) {
         // A copy, so a listener that starts a run during this tick doesn't disturb the loop.
         for (Run r : new ArrayList<>(runs.values())) {
             if (r.runner.finished()) continue;
             try {
                 if (!game.online(r.presser.id())) r.runner.requestStop("player_offline");
+                if (r.targetId != null && game.onlineName(r.targetId) == null) r.runner.requestStop("target_offline");
                 r.runner.tick(tick, nowMillis);
             } catch (RuntimeException e) {
                 // A fault in the game adapter ends this run only; the others keep going.
@@ -452,7 +568,7 @@ public final class DeckService implements Deck {
     }
 
     @Override
-    public synchronized boolean stop(String runId, Presser by) {
+    public boolean stop(String runId, Presser by) {
         Run r = runs.get(runId);
         if (r == null || r.runner.finished() || by == null) return false;
         if (r.presser.id().equals(by.id())) {
@@ -466,7 +582,7 @@ public final class DeckService implements Deck {
     }
 
     /** {@code /deck stop all}: asks every run to stop. The number asked, or -1 if {@code by} isn't an operator. */
-    public synchronized int stopAll(Presser by) {
+    public int stopAll(Presser by) {
         if (!game.isOperator(by)) return -1;
         int n = 0;
         for (Run r : runs.values()) {
@@ -478,7 +594,7 @@ public final class DeckService implements Deck {
     }
 
     @Override
-    public synchronized String observe(Presser presser, RunListener listener) {
+    public String observe(Presser presser, RunListener listener) {
         if (presser == null || presser.id() == null || listener == null) return null;
         String id = idPrefix + "-o" + nextObserver++;
         observers.put(id, new Observer(presser.id(), listener));
@@ -486,29 +602,64 @@ public final class DeckService implements Deck {
     }
 
     @Override
-    public synchronized void unobserve(String observerId) {
+    public void unobserve(String observerId) {
         Observer o = observerId == null ? null : observers.remove(observerId);
         if (o != null) o.active = false;
     }
 
     /** On reload: every observer ends, as if each had called {@code unobserve}. */
-    public synchronized void clearObservers() {
+    public void clearObservers() {
         for (Observer o : observers.values()) o.active = false;
         observers.clear();
     }
 
+    // ---- listing ------------------------------------------------------------------------------------
+
     @Override
-    public synchronized RunStatus status(String runId) {
-        Run r = runs.get(runId);
-        return r == null ? null : r.runner.status(r.presser.id());
+    public List<MacroInfo> macros(Presser presser, String category) {
+        if (presser == null || presser.id() == null || !game.mayUse(presser)) return List.of();
+        List<MacroInfo> out = new ArrayList<>();
+        CommandCatalog cat = catalog.get();
+        // An id is listed once, as a plain MACRO_REF resolves it; if that one is off limits, the id is left out.
+        // The set is only asked whether it holds an id, so its order never reaches the list.
+        Set<String> seen = new HashSet<>();
+        for (Macro m : macros.playerMacros(presser.id())) {
+            if (seen.add(m.id()) && holds(presser, m.permission()) && (category == null || category.equals(m.category()))) {
+                out.add(new MacroInfo(m.id(), m.name(), m.description(), m.category(), MacroInfo.Origin.PLAYER, null,
+                    asksFirst(m.dangerous(), m.body(), cat)));
+            }
+        }
+        for (Macro m : macros.serverMacros()) {
+            if (seen.add(m.id()) && holds(presser, m.permission()) && (category == null || category.equals(m.category()))) {
+                out.add(new MacroInfo(m.id(), m.name(), m.description(), m.category(), MacroInfo.Origin.SERVER, null,
+                    asksFirst(m.dangerous(), m.body(), cat)));
+            }
+        }
+        if (cat != null) {
+            for (Map.Entry<String, Preset> e : cat.presets().entrySet()) {
+                Preset p = e.getValue();
+                if (!seen.add(p.id()) || !holds(presser, p.permission())) continue;
+                if (category != null && !category.equals(p.category())) continue;
+                String mod = e.getKey().substring(0, e.getKey().lastIndexOf('/'));
+                out.add(new MacroInfo(p.id(), p.name(), p.description(), p.category(), MacroInfo.Origin.PRESET, mod,
+                    asksFirst(false, p.macro(), cat)));
+            }
+        }
+        return List.copyOf(out);
     }
 
     @Override
-    public synchronized List<RunStatus> running(Presser presser) {
+    public RunStatus status(String runId) {
+        Run r = runs.get(runId);
+        return r == null ? null : r.runner.status(r.presser.id(), r.targetId);
+    }
+
+    @Override
+    public List<RunStatus> running(Presser presser) {
         List<RunStatus> out = new ArrayList<>();
         for (Run r : runs.values()) {
             if (!r.runner.finished() && (presser == null || r.presser.id().equals(presser.id()))) {
-                out.add(r.runner.status(r.presser.id()));
+                out.add(r.runner.status(r.presser.id(), r.targetId));
             }
         }
         return out;

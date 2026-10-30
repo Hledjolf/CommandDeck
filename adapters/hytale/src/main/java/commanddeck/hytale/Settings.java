@@ -67,7 +67,8 @@ final class Settings {
         limits = new Limits(integer(m, "MaxIterations", d.maxIterations(), 1, 100_000, warnings),
             integer(m, "MaxDepth", d.maxDepth(), 1, 64, warnings), integer(m, "MaxRuntimeSeconds", d.maxRuntimeSeconds(), 1, 86_400, warnings),
             integer(m, "StepsPerTick", d.stepsPerTick(), 1, 100, warnings),
-            integer(m, "MaxRunningPerPlayer", d.maxRunningPerPlayer(), 1, 100, warnings));
+            integer(m, "MaxRunningPerPlayer", d.maxRunningPerPlayer(), 1, 100, warnings),
+            integer(m, "MaxRunningForConsole", d.maxRunningConsole(), 1, 100, warnings));
         return warnings.length() == 0 ? null : warnings.toString().trim();
     }
 
@@ -82,6 +83,7 @@ final class Settings {
         m.put("MaxRuntimeSeconds", (long) limits.maxRuntimeSeconds());
         m.put("StepsPerTick", (long) limits.stepsPerTick());
         m.put("MaxRunningPerPlayer", (long) limits.maxRunningPerPlayer());
+        m.put("MaxRunningForConsole", (long) limits.maxRunningConsole());
         return m;
     }
 

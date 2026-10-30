@@ -16,11 +16,16 @@ public final class MacroWriter {
     public static Map<String, Object> document(Macro m) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("format", "commanddeck.macro");
-        out.put("format_version", m.formatVersion() == null ? MacroReader.SUPPORTED : m.formatVersion());
+        String version = m.formatVersion() == null ? MacroReader.SUPPORTED : m.formatVersion();
+        // A permission or a category needs format 1.1, so a 1.0 document that gains one is written as 1.1.
+        if ((m.permission() != null || m.category() != null) && MacroReader.minor(version) < 1) version = "1.1";
+        out.put("format_version", version);
         out.put("id", m.id());
         out.put("name", m.name());
         if (m.description() != null) out.put("description", m.description());
+        if (m.category() != null) out.put("category", m.category());
         if (m.dangerous()) out.put("dangerous", true);
+        if (m.permission() != null) out.put("permission", m.permission());
         out.put("body", node(m.body()));
         return out;
     }

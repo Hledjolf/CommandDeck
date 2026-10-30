@@ -175,12 +175,20 @@ final class DeckCommand extends AbstractAsyncCommand {
 
     private void list(Presser presser, List<String> out) {
         List<String> mine = new ArrayList<>();
-        for (Macro m : plugin.macros().player(presser.id())) mine.add(m.id() + " (" + m.name() + ")");
+        // As in the window: your own macros that need a permission you lack are marked with it (you can only
+        // delete them); anything else that needs one is left out.
+        for (Macro m : plugin.macros().player(presser.id())) {
+            boolean held = plugin.deck().holds(presser, m.permission());
+            mine.add(m.id() + " (" + m.name() + (held ? "" : ", needs " + m.permission()) + ")");
+        }
         List<String> server = new ArrayList<>();
-        for (Macro m : plugin.macros().server()) server.add(m.id() + " (" + m.name() + ")");
+        for (Macro m : plugin.macros().server()) {
+            if (plugin.deck().holds(presser, m.permission())) server.add(m.id() + " (" + m.name() + ")");
+        }
         List<String> presets = new ArrayList<>();
         if (plugin.catalog() != null) {
             for (Map.Entry<String, Preset> e : plugin.catalog().presets().entrySet()) {
+                if (!plugin.deck().holds(presser, e.getValue().permission())) continue;
                 presets.add(e.getValue().id() + " (" + e.getValue().name() + ", from " + e.getKey().substring(0, e.getKey().lastIndexOf('/')) + ")");
             }
         }

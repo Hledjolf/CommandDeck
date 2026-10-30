@@ -22,8 +22,10 @@ import java.util.Set;
 
 /**
  * Reads a command sidecar ({@code commanddeck/commands.json} in a mod, or a server owner's override) and
- * checks every rule of the format by hand. The first problem wins: {@code invalid} with a JSON Pointer, or a
- * preset's own macro problem with its pointer made relative to the whole file.
+ * checks every rule of the format by hand. A problem in the document itself refuses the whole sidecar:
+ * {@code invalid} with a JSON Pointer. Since 1.1, a problem inside one command or preset skips only that
+ * entry, and the problem goes in {@link Sidecar#skipped} (a preset's own macro problem with its pointer made
+ * relative to the whole file).
  */
 public final class SidecarReader {
     private static final Set<String> DOC_KEYS = Set.of("format", "format_version", "mod", "commands", "presets");
@@ -34,7 +36,7 @@ public final class SidecarReader {
         "options", "description", "placeholders");
     private static final Set<String> VARIANT_KEYS = Set.of("label", "description", "args");
     private static final Set<String> EXAMPLE_KEYS = Set.of("line", "explanation");
-    private static final Set<String> PRESET_KEYS = Set.of("id", "name", "description", "category", "macro");
+    private static final Set<String> PRESET_KEYS = Set.of("id", "name", "description", "category", "permission", "macro");
 
     private SidecarReader() {}
 
@@ -84,14 +86,29 @@ public final class SidecarReader {
         String modName = optString(mod, "name", "/mod", -1);
         String modVersion = optString(mod, "version", "/mod", -1);
         List<Object> rawCommands = array(need(m, "commands", ""), "/commands");
+        List<Problem> skipped = new ArrayList<>();
         List<CommandInfo> commands = new ArrayList<>();
-        for (int i = 0; i < rawCommands.size(); i++) commands.add(command(rawCommands.get(i), "/commands/" + i));
+        for (int i = 0; i < rawCommands.size(); i++) {
+            try {
+                commands.add(command(rawCommands.get(i), "/commands/" + i));
+            } catch (Checked.Invalid e) {
+                skipped.add(Problem.invalid(e.pointer, e.getMessage()));
+            }
+        }
         List<Preset> presets = new ArrayList<>();
         if (m.containsKey("presets")) {
             List<Object> raw = array(m.get("presets"), "/presets");
-            for (int i = 0; i < raw.size(); i++) presets.add(preset(raw.get(i), "/presets/" + i));
+            for (int i = 0; i < raw.size(); i++) {
+                try {
+                    presets.add(preset(raw.get(i), "/presets/" + i, MacroReader.minor(version)));
+                } catch (Checked.Invalid e) {
+                    skipped.add(Problem.invalid(e.pointer, e.getMessage()));
+                } catch (PresetRefused e) {
+                    skipped.add(e.problem);
+                }
+            }
         }
-        return new Sidecar(version, modId, modName, modVersion, List.copyOf(commands), List.copyOf(presets));
+        return new Sidecar(version, modId, modName, modVersion, List.copyOf(commands), List.copyOf(presets), List.copyOf(skipped));
     }
 
     private static CommandInfo command(Object json, String at) {
@@ -177,7 +194,7 @@ public final class SidecarReader {
         return new Arg(name, type, style, required, defaultValue, min, max, step, options, description, placeholders);
     }
 
-    private static Preset preset(Object json, String at) {
+    private static Preset preset(Object json, String at, int minor) {
         Map<String, Object> m = object(json, at);
         only(m, PRESET_KEYS, at);
         String id = string(need(m, "id", at), at + "/id");
@@ -185,10 +202,16 @@ public final class SidecarReader {
         String name = string(need(m, "name", at), at + "/name");
         String description = optString(m, "description", at, -1);
         String category = optString(m, "category", at, -1);
+        String permission = null;
+        if (m.containsKey("permission")) {
+            permission = string(m.get("permission"), at + "/permission");
+            if (permission.isEmpty()) throw new Checked.Invalid(at + "/permission", "permission must not be empty");
+            if (minor < 1) throw new Checked.Invalid(at + "/permission", "permission needs format_version 1.1");
+        }
         Object macro = object(need(m, "macro", at), at + "/macro");
         MacroReader.Result<Node> body = MacroReader.readNode(macro);
         if (!body.ok()) throw new PresetRefused(prefixed(body.problem(), at + "/macro"));
-        return new Preset(id, name, description, category, body.value());
+        return new Preset(id, name, description, category, body.value(), permission);
     }
 
     /** The same problem, with its pointer made relative to the whole sidecar. */

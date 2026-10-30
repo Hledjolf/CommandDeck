@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -56,6 +57,7 @@ public final class DeckWindow {
     public static final String DIR = "CommandDeck/";
     public static final String DOC = DIR + "Window.ui";
     public static final String LIST_ROW = DIR + "ListRow.ui";
+    public static final String LIST_HEADING = DIR + "ListHeading.ui";
 
     /** Shown on a command the game says this player may not run. Running stays possible: the game decides. */
     static final String NO_PERMISSION = "You don't have the game's permission for this command. You can still press Run, but the game "
@@ -71,17 +73,19 @@ public final class DeckWindow {
     public static final String RUNS_FOOTER = DIR + "RunsFooter.ui";
 
     /** Every document the window uses (the plugin checks they are registered). */
-    public static final List<String> DOCUMENTS = List.of(DOC, LIST_ROW, NOTE_ROW, TEXT_ROW, CHECK_ROW, CHOICE_ROW, STEP_ROW, RUN_ROW,
+    public static final List<String> DOCUMENTS = List.of(DOC, LIST_ROW, LIST_HEADING, NOTE_ROW, TEXT_ROW, CHECK_ROW, CHOICE_ROW, STEP_ROW, RUN_ROW,
         FORM_FOOTER, EDITOR_FOOTER, RUNS_FOOTER);
 
     /** The most commands the list shows at once; the search narrows it. */
     static final int MAX_LIST = 150;
     /** The most ids an item or block picker offers at once; typing in the field narrows them. */
     static final int MAX_MATCHES = 40;
-    /** The editor's rows before the first step: id, name, ask first, where it is saved, description, show notes. */
-    static final int HEADER_ROWS = 6;
+    /** The editor's rows before the first step: id, name, ask first, where it is saved, description, category, show notes. */
+    static final int HEADER_ROWS = 7;
     /** The header fields captured with every editor click, in row order (the notes switch is view state). */
-    private static final String[] HEADER_FIELDS = {"id", "name", "danger", "where", "description"};
+    private static final String[] HEADER_FIELDS = {"id", "name", "danger", "where", "description", "category"};
+    /** The Macros tab's heading for macros and presets without a category; it comes last. */
+    static final String OTHER = "Other";
     static final String SOURCE = "window";
 
     public enum Tab {
@@ -131,6 +135,11 @@ public final class DeckWindow {
     private String draftOriginalId;
     private Scope draftScope = Scope.PLAYER;
     private boolean draftReadOnly;
+    /**
+     * The permission node the presser needs for the open macro, when it is their own and they lack it: they see
+     * it and may delete it, but can't run or change it. Null otherwise.
+     */
+    private String draftNeeds;
     private boolean dirty;
     private boolean showNotes;
 
@@ -425,32 +434,70 @@ public final class DeckWindow {
         if (tab == Tab.COMMANDS) {
             List<CommandInfo> all = commands();
             int shown = Math.min(all.size(), MAX_LIST);
-            Set<String> favs = host.prefs().favorites(host.presser().id());
-            for (int i = 0; i < shown; i++) {
-                CommandInfo c = all.get(i);
-                listRow(ops, i, (favs.contains(c.name()) ? "* " : "") + "/" + c.name() + (c.label() != null ? "  " + c.label() : "")
-                    + "  [" + c.level().id() + "]" + (Boolean.FALSE.equals(host.mayRun(c.name())) ? "  (no permission)" : ""),
-                    c.name().equals(commandName), c.name());
-            }
+            renderEntries(ops, commandEntries(all.subList(0, shown)));
             CommandCatalog cat = host.catalog();
             int total = cat == null ? 0 : cat.visible().size();
             ops.text("#Count", all.size() == total ? total + " commands" : all.size() + " of " + total + " commands"
                 + (shown < all.size() ? " (first " + shown + " shown)" : ""));
         } else if (tab == Tab.MACROS) {
             List<String[]> entries = macroEntries();
-            for (int i = 0; i < entries.size(); i++) listRow(ops, i, entries.get(i)[1], entries.get(i)[0].equals(macroKey), entries.get(i)[0]);
-            ops.text("#Count", (entries.size() - 1) + " macros and presets");
+            renderEntries(ops, entries);
+            long macros = entries.stream().filter(e -> e[0] != null && !e[0].equals("new")).count();
+            ops.text("#Count", macros + " macros and presets");
         } else {
             ops.text("#Count", RunText.count(runs().size(), "run") + " going");
         }
     }
 
-    private void listRow(UiOps ops, int i, String text, boolean selected, String key) {
-        String sel = "#List[" + i + "]";
-        ops.append("#List", LIST_ROW);
-        ops.text(sel + " #Button", text);
-        ops.set(sel + " #Button.Disabled", selected);
-        ops.bind(sel + " #Button", "Activating", Map.of("Action", "pick", "Key", key));
+    /** Each entry is {key, text}; a null key is a block's heading. */
+    private void renderEntries(UiOps ops, List<String[]> entries) {
+        for (int i = 0; i < entries.size(); i++) {
+            String[] e = entries.get(i);
+            String sel = "#List[" + i + "]";
+            if (e[0] == null) {
+                ops.append("#List", LIST_HEADING);
+                ops.text(sel, e[1]);
+                continue;
+            }
+            boolean selected = tab == Tab.COMMANDS ? e[0].equals(commandName) : e[0].equals(macroKey);
+            ops.append("#List", LIST_ROW);
+            ops.text(sel + " #Button #Label", e[1]);
+            ops.set(sel + " #Button.Disabled", selected);
+            ops.bind(sel + " #Button", "Activating", Map.of("Action", "pick", "Key", e[0]));
+        }
+    }
+
+    /**
+     * The commands in blocks: favorites, then the ones without the game's permission, then by level. Each
+     * block is in name order. A command is in the first block it belongs to.
+     */
+    private List<String[]> commandEntries(List<CommandInfo> commands) {
+        Set<String> favs = host.prefs().favorites(host.presser().id());
+        Map<String, List<CommandInfo>> blocks = new LinkedHashMap<>();
+        for (String h : new String[] {"Favorites", "No permission", "Described by a sidecar", "Typed (from the game)",
+            "Raw (name and help only)"}) {
+            blocks.put(h, new ArrayList<>());
+        }
+        for (CommandInfo c : commands) {
+            String block = favs.contains(c.name()) ? "Favorites"
+                : Boolean.FALSE.equals(host.mayRun(c.name())) ? "No permission"
+                : switch (c.level()) {
+                    case DESCRIBED -> "Described by a sidecar";
+                    case TYPED -> "Typed (from the game)";
+                    case RAW -> "Raw (name and help only)";
+                };
+            blocks.get(block).add(c);
+        }
+        List<String[]> out = new ArrayList<>();
+        for (Map.Entry<String, List<CommandInfo>> b : blocks.entrySet()) {
+            if (b.getValue().isEmpty()) continue;
+            out.add(new String[] {null, b.getKey()});
+            b.getValue().sort(java.util.Comparator.comparing((CommandInfo c) -> c.name().toLowerCase(Locale.ROOT)));
+            for (CommandInfo c : b.getValue()) {
+                out.add(new String[] {c.name(), "/" + c.name() + (c.label() != null ? "  " + c.label() : "")});
+            }
+        }
+        return out;
     }
 
     /** The commands that match the search and the filter, in catalog order. */
@@ -483,22 +530,33 @@ public final class DeckWindow {
         return false;
     }
 
-    /** Key and text of each entry of the macros list, "new" first. */
+    /**
+     * Key and text of each entry of the macros list: "new" first, then a block per category (a null key is a
+     * heading), headings in alphabetical order and "Other" last for those without one. Each block is in name
+     * order, with the id added to a name that two entries share. Search and the filter apply within the blocks,
+     * and an empty block is left out. The presser's own macros that need a permission they lack are shown,
+     * marked with it; other macros and presets they may not run are left out.
+     */
     private List<String[]> macroEntries() {
         List<String[]> out = new ArrayList<>();
         out.add(new String[] {"new", "+ New macro"});
         String q = query.trim().toLowerCase(Locale.ROOT);
+        Map<String, List<String[]>> blocks = new TreeMap<>(DeckWindow::headingOrder);
         if (filter.equals("all") || filter.equals("mine")) {
             for (Macro m : host.macros().list(Scope.PLAYER, host.presser().id())) {
-                if (q.isEmpty() || (m.id() + " " + m.name()).toLowerCase(Locale.ROOT).contains(q)) {
-                    out.add(new String[] {"mine:" + m.id(), "Mine: " + m.name() + "  (" + m.id() + ")"});
+                String needs = holds(m.permission()) ? null : m.permission();
+                String block = m.category() != null ? m.category() : OTHER;
+                if (q.isEmpty() || (m.id() + " " + m.name() + " " + block).toLowerCase(Locale.ROOT).contains(q)) {
+                    blocks.computeIfAbsent(block, k -> new ArrayList<>()).add(new String[] {"mine:" + m.id(), m.name(), m.id(), needs});
                 }
             }
         }
         if (filter.equals("all") || filter.equals("server")) {
             for (Macro m : host.macros().list(Scope.SERVER, null)) {
-                if (q.isEmpty() || (m.id() + " " + m.name()).toLowerCase(Locale.ROOT).contains(q)) {
-                    out.add(new String[] {"server:" + m.id(), "Server: " + m.name() + "  (" + m.id() + ")"});
+                if (!holds(m.permission())) continue;
+                String block = m.category() != null ? m.category() : OTHER;
+                if (q.isEmpty() || (m.id() + " " + m.name() + " " + block).toLowerCase(Locale.ROOT).contains(q)) {
+                    blocks.computeIfAbsent(block, k -> new ArrayList<>()).add(new String[] {"server:" + m.id(), m.name(), m.id(), null});
                 }
             }
         }
@@ -506,13 +564,43 @@ public final class DeckWindow {
         if (cat != null && (filter.equals("all") || filter.equals("presets"))) {
             for (Map.Entry<String, Preset> e : cat.presets().entrySet()) {
                 Preset p = e.getValue();
+                if (!holds(p.permission())) continue;
                 String mod = e.getKey().substring(0, e.getKey().lastIndexOf('/'));
-                if (q.isEmpty() || (p.id() + " " + p.name() + " " + mod).toLowerCase(Locale.ROOT).contains(q)) {
-                    out.add(new String[] {"preset:" + e.getKey(), "Preset: " + p.name() + "  (" + mod + ")"});
+                String block = p.category() != null ? p.category() : OTHER;
+                String searched = p.id() + " " + p.name() + " " + mod + " " + cat.modName(mod) + " " + block;
+                if (q.isEmpty() || searched.toLowerCase(Locale.ROOT).contains(q)) {
+                    blocks.computeIfAbsent(block, k -> new ArrayList<>()).add(new String[] {"preset:" + e.getKey(), p.name(), p.id(), null});
                 }
             }
         }
+        for (Map.Entry<String, List<String[]>> b : blocks.entrySet()) {
+            out.add(new String[] {null, b.getKey()});
+            List<String[]> items = b.getValue();
+            for (String[] x : items) {
+                if (x[1] == null || x[1].isBlank()) x[1] = x[2]; // a macro without a name shows its id
+            }
+            items.sort(java.util.Comparator.comparing((String[] x) -> x[1].toLowerCase(Locale.ROOT)).thenComparing(x -> x[2]));
+            for (String[] x : items) {
+                boolean shared = items.stream().filter(y -> y[1].equalsIgnoreCase(x[1])).count() > 1;
+                String text = shared ? x[1] + "  (" + x[2] + ")" : x[1];
+                out.add(new String[] {x[0], x[3] == null ? text : text + "  (needs " + x[3] + ")"});
+            }
+        }
         return out;
+    }
+
+    /** Headings in alphabetical order, ignoring case, with "Other" last. */
+    static int headingOrder(String a, String b) {
+        if (a.equals(b)) return 0;
+        if (a.equals(OTHER)) return 1;
+        if (b.equals(OTHER)) return -1;
+        int c = a.compareToIgnoreCase(b);
+        return c != 0 ? c : a.compareTo(b);
+    }
+
+    /** Does the presser hold a macro's or preset's permission? True when it has none. */
+    private boolean holds(String permission) {
+        return host.deck().holds(host.presser(), permission);
     }
 
     private void pick(UiOps ops, String key) {
@@ -1060,6 +1148,7 @@ public final class DeckWindow {
         draftOriginalId = null;
         draftScope = Scope.PLAYER;
         draftReadOnly = false;
+        draftNeeds = null;
         dirty = false;
         macroKey = "new";
     }
@@ -1085,18 +1174,20 @@ public final class DeckWindow {
             draft = MacroDraft.of(m);
             draftOriginalId = m.id();
             draftScope = scope;
-            draftReadOnly = scope == Scope.SERVER ? !host.isOperator() : !host.canEditOwn();
+            draftNeeds = holds(m.permission()) ? null : m.permission();
+            draftReadOnly = draftNeeds != null || (scope == Scope.SERVER ? !host.isOperator() : !host.canEditOwn());
             dirty = false;
             macroKey = key;
         } else if (key.startsWith("preset:")) {
             CommandCatalog cat = host.catalog();
             Preset p = cat == null ? null : cat.presets().get(key.substring(7));
             if (p == null) return false;
-            draft = MacroDraft.copyOf(p.id(), p.name(), p.macro());
+            draft = MacroDraft.copyOf(p.id(), p.name(), p.macro(), p.permission());
             draft.description = p.description();
             draftOriginalId = null;
             draftScope = Scope.PLAYER;
             draftReadOnly = true;
+            draftNeeds = null;
             dirty = false;
             macroKey = key;
         } else {
@@ -1119,6 +1210,8 @@ public final class DeckWindow {
         boolean preset = macroKey != null && macroKey.startsWith("preset:");
         ops.text("#Heading", draft.name == null || draft.name.isBlank() ? draft.id : draft.name);
         ops.text("#Meta", preset ? "A preset from a mod: run it, or save a copy as your own to change it."
+            : draftNeeds != null ? "Your own macro, but it needs the permission " + draftNeeds
+                + ", which you don't have. You can't run or change it, but you can delete it."
             : draftReadOnly ? (draftScope == Scope.SERVER ? "A server macro: only operators can change it." : "You may run this macro, but not change it.")
             : (draftScope == Scope.SERVER ? "A server macro." : "Your own macro.") + (draftOriginalId == null ? " Not saved yet." : ""));
 
@@ -1135,12 +1228,14 @@ public final class DeckWindow {
         hint(ops, "#Rows[3]", host.isOperator() ? "server macros can be run by everyone" : "");
         headerRow(ops, 4, TEXT_ROW, "Description", draft.description == null ? "" : draft.description, "optional, shown with the macro",
             "description");
+        headerRow(ops, 5, TEXT_ROW, "Category", draft.category == null ? "" : draft.category,
+            "optional, up to 40 characters; the Macros list groups by it", "category");
         rows.add(new Row(RowKind.FIELD, null));
         ops.append("#Rows", CHECK_ROW);
-        ops.text("#Rows[5] #Label", "Show step notes");
-        ops.set("#Rows[5] #Input.Value", showNotes);
-        hint(ops, "#Rows[5]", "a note under each step, saved with the macro");
-        ops.bind("#Rows[5] #Input", "ValueChanged", editorCaptures(Map.of("Action", "notes", "Gen", g(), "@Value", "#Rows[5] #Input.Value")));
+        ops.text("#Rows[6] #Label", "Show step notes");
+        ops.set("#Rows[6] #Input.Value", showNotes);
+        hint(ops, "#Rows[6]", "a note under each step, saved with the macro");
+        ops.bind("#Rows[6] #Input", "ValueChanged", editorCaptures(Map.of("Action", "notes", "Gen", g(), "@Value", "#Rows[6] #Input.Value")));
 
         List<MacroDraft.Step> steps = draft.steps();
         for (int j = 0; j < steps.size(); j++) {
@@ -1159,9 +1254,10 @@ public final class DeckWindow {
         ops.bind(f + "#RunMacro", "Activating", editorCaptures(Map.of("Action", "runMacro", "Gen", g())));
         ops.bind(f + "#Delete", "Activating", Map.of("Action", "deleteMacro"));
         boolean canCopy = host.canEditOwn();
-        ops.text(f + "#Save", draftReadOnly ? "Save as mine" : "Save");
-        ops.set(f + "#Save.Disabled", draftReadOnly && !canCopy);
-        ops.set(f + "#Delete.Disabled", draftReadOnly || draftOriginalId == null);
+        ops.text(f + "#Save", draftReadOnly && draftNeeds == null ? "Save as mine" : "Save");
+        ops.set(f + "#Save.Disabled", draftNeeds != null || draftReadOnly && !canCopy);
+        ops.set(f + "#RunMacro.Disabled", draftNeeds != null);
+        ops.set(f + "#Delete.Disabled", !mayDelete());
         renderValidation(ops);
     }
 
@@ -1276,6 +1372,12 @@ public final class DeckWindow {
                 draft.description = v;
                 break;
             }
+            case "category": {
+                String old = draft.category == null ? "" : draft.category;
+                if (!v.equals(old)) dirty = true;
+                draft.category = v;
+                break;
+            }
             case "danger":
                 if (draftReadOnly) return;
                 boolean d = "true".equalsIgnoreCase(v);
@@ -1383,6 +1485,10 @@ public final class DeckWindow {
 
     private void save(UiOps ops) {
         if (draft == null) return;
+        if (draftNeeds != null) {
+            setStatus(ops, "Not saved: this macro needs the permission " + draftNeeds + ", which you don't have.");
+            return;
+        }
         Scope scope = draftReadOnly ? Scope.PLAYER : draftScope;
         if (scope == Scope.SERVER ? !host.isOperator() : !host.canEditOwn()) {
             setStatus(ops, scope == Scope.SERVER ? "Only operators can save server macros." : "You may not save macros on this server.");
@@ -1405,6 +1511,7 @@ public final class DeckWindow {
         draftOriginalId = m.id();
         draftScope = scope;
         draftReadOnly = false;
+        draftNeeds = null;
         dirty = false;
         macroKey = (scope == Scope.SERVER ? "server:" : "mine:") + m.id();
         status = "Saved " + m.name() + " (" + m.id() + ").";
@@ -1418,33 +1525,32 @@ public final class DeckWindow {
 
     private void runMacro(UiOps ops) {
         if (draft == null) return;
+        if (draftNeeds != null) {
+            setStatus(ops, "Not run: this macro needs the permission " + draftNeeds + ", which you don't have.");
+            return;
+        }
         boolean preset = macroKey != null && macroKey.startsWith("preset:");
         if (dirty || (!preset && draftOriginalId == null)) {
             setStatus(ops, "Save the macro first, so what runs is what is saved.");
             return;
         }
-        String id = preset ? draft.id : draftOriginalId;
-        // A reference runs the first match: your macros, then the server's, then presets.
-        String shadow = null;
-        if (preset || draftScope == Scope.SERVER) {
-            for (Macro m : host.macros().list(Scope.PLAYER, host.presser().id())) {
-                if (m.id().equals(id)) shadow = "your own macro " + id;
-            }
-        }
-        if (preset && shadow == null) {
-            for (Macro m : host.macros().list(Scope.SERVER, null)) {
-                if (m.id().equals(id)) shadow = "the server macro " + id;
-            }
-        }
-        if (shadow != null) {
-            setStatus(ops, "Can't run this one by its id: " + shadow + " has the same id and would run instead.");
-            return;
-        }
-        run(ops, new RunRequest(List.of(RunItem.ref(id)), SOURCE), "Ran " + id);
+        // A scoped reference runs exactly the macro that is open, whatever else shares its id.
+        String ref = preset ? macroKey : (draftScope == Scope.SERVER ? "server:" : "player:") + draftOriginalId;
+        run(ops, new RunRequest(List.of(RunItem.ref(ref)), SOURCE), "Ran " + (preset ? draft.id : draftOriginalId));
+    }
+
+    /**
+     * Your own macros can be deleted with the edit permission, even one that needs a permission you lack;
+     * server macros by operators.
+     */
+    private boolean mayDelete() {
+        if (draft == null || draftOriginalId == null) return false;
+        if (draftNeeds != null) return draftScope == Scope.PLAYER && host.canEditOwn();
+        return !draftReadOnly;
     }
 
     private void askDelete(UiOps ops) {
-        if (draft == null || draftReadOnly || draftOriginalId == null) return;
+        if (!mayDelete()) return;
         pending = Pending.delete(draftScope, draftOriginalId);
         showConfirm(ops, "Delete the macro " + draft.name + " (" + draftOriginalId + ")? This can't be undone.", "");
         setStatus(ops, "Press Yes to delete, or No to keep it.");

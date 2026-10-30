@@ -15,6 +15,7 @@ public final class CommandCatalog {
     private final List<Problem> warnings;
     private final Map<String, CommandInfo> byNameOrAlias = new LinkedHashMap<>();
     private final Map<String, Preset> presets = new LinkedHashMap<>();
+    private final Map<String, String> modNames = new LinkedHashMap<>();
 
     private CommandCatalog(List<CommandInfo> commands, List<Problem> warnings, List<Sidecar> sidecars) {
         this.commands = commands;
@@ -25,6 +26,7 @@ public final class CommandCatalog {
         for (CommandInfo c : commands) byNameOrAlias.put(c.name(), c);
         for (Sidecar s : sidecars) {
             for (Preset p : s.presets()) presets.put(s.modId() + "/" + p.id(), p);
+            if (s.modName() != null) modNames.put(s.modId(), s.modName());
         }
     }
 
@@ -74,5 +76,10 @@ public final class CommandCatalog {
     /** The presets, keyed {@code <mod id>/<preset id>}. */
     public Map<String, Preset> presets() {
         return presets;
+    }
+
+    /** The display name a sidecar gives its mod ({@code mod.name}), or the id if it gives none. */
+    public String modName(String modId) {
+        return modNames.getOrDefault(modId, modId);
     }
 }

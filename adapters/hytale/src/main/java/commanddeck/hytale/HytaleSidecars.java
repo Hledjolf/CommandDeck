@@ -8,12 +8,16 @@ import commanddeck.command.Sidecar;
 import commanddeck.command.SidecarReader;
 import commanddeck.command.Sidecars;
 import commanddeck.macro.MacroReader;
+import commanddeck.macro.Problem;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -44,8 +48,13 @@ final class HytaleSidecars {
         }
         Path dir = dataDir.resolve("sidecars");
         if (Files.isDirectory(dir)) {
+            // In name order, so the result never depends on the order the file system lists them: with two
+            // files for one mod, the later name wins. The mod is the file's own mod.id, whatever its name.
+            List<Path> sorted = new ArrayList<>();
             try (DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*.json")) {
-                for (Path f : files) {
+                for (Path f : files) sorted.add(f);
+                sorted.sort(Comparator.comparing(p -> p.getFileName().toString()));
+                for (Path f : sorted) {
                     Sidecar s = read(Files.readString(f, StandardCharsets.UTF_8), "sidecars/" + f.getFileName(), log);
                     if (s != null) out.addFromOwner(s);
                 }
@@ -62,8 +71,12 @@ final class HytaleSidecars {
             log.atWarning().log("[CommandDeck] Rejected sidecar %s: %s", source, r.problem().message());
             return null;
         }
-        log.atInfo().log("[CommandDeck] Sidecar %s for %s: %d commands, %d presets", source, r.value().modId(),
-            r.value().commands().size(), r.value().presets().size());
+        for (Problem p : r.value().skipped()) {
+            log.atWarning().log("[CommandDeck] Sidecar %s: skipped %s: %s", source, p.detail().get("pointer"), p.message());
+        }
+        log.atInfo().log("[CommandDeck] Sidecar %s for %s: %d commands, %d presets%s", source, r.value().modId(),
+            r.value().commands().size(), r.value().presets().size(),
+            r.value().skipped().isEmpty() ? "" : ", " + r.value().skipped().size() + " skipped");
         return r.value();
     }
 

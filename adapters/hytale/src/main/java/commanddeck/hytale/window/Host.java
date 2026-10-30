@@ -4,7 +4,7 @@ import commanddeck.api.Presser;
 import commanddeck.api.RunListener;
 import commanddeck.command.ArgType;
 import commanddeck.command.CommandCatalog;
-import commanddeck.deck.DeckService;
+import commanddeck.hytale.LockedDeck;
 import commanddeck.macro.Limits;
 import java.util.List;
 
@@ -12,7 +12,8 @@ import java.util.List;
 public interface Host {
     Presser presser();
 
-    DeckService deck();
+    /** The deck, behind the lock that makes it safe from any thread. */
+    LockedDeck deck();
 
     /** The current command catalog (it changes on reload); may be null before boot. */
     CommandCatalog catalog();

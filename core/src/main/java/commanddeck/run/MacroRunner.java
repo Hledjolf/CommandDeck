@@ -114,10 +114,15 @@ public final class MacroRunner {
     }
 
     public RunStatus status(String presserId) {
+        return status(presserId, null);
+    }
+
+    /** {@code targetId} is null when the run's target is the presser. */
+    public RunStatus status(String presserId, String targetId) {
         RunStatus.State state = result != null ? RunStatus.State.FINISHED
             : waitTicksLeft > 0 || waitUntilMillis >= 0 || pending != null ? RunStatus.State.WAITING : RunStatus.State.RUNNING;
         String at = sentLeaf != null && pending != null ? sentLeaf.path() : next != null ? next.path() : null;
-        return new RunStatus(runId, presserId, source, macroId, state, steps.size(), at, result);
+        return new RunStatus(runId, presserId, source, macroId, state, steps.size(), at, result, targetId);
     }
 
     /** One game tick. {@code nowMillis} is real time, for {@code wait} in seconds and the runtime limit. */

@@ -53,6 +53,7 @@ Status: **1.0.0**, the first release. Tested on Hytale server **0.7.4**.
 - `commanddeck.use`: use CommandDeck on a server. In singleplayer everyone may use it by default (see the settings).
 - `commanddeck.macros.edit`: save your own macros. Operators may always.
 - `commanddeck.operator`: `/deck stop all` and `/deck reload`. The singleplayer world's owner and the console have it.
+- `commanddeck.run_others` (from 1.1.0): lets another mod run a macro *for* another player, filling `{target}` with their name (Generous Operator's gifts). The commands still run with your own permissions.
 
 CommandDeck never grants a command: the game still checks every command as the player who runs it.
 
@@ -69,6 +70,7 @@ The settings are in `mods/Hledjolf_CommandDeck/config.json`. With [Mod Settings 
 | `MaxRuntimeSeconds` | 300 | A run that takes longer stops before its next step. |
 | `StepsPerTick` | 1 | How many commands one run may send in a tick. |
 | `MaxRunningPerPlayer` | 1 | How many runs one player may have going at once. |
+| `MaxRunningForConsole` | 4 | How many runs the server console may have going at once. Other mods use the console to act for the server. |
 | `PlainSender` | false | Send through the server's own handler. Refusals and replies can't be seen then, so every step is marked uncertain. Only for a mod whose commands misbehave. |
 | `CommandTimeoutSeconds` | 10 | A command that hasn't finished after this long counts as sent (uncertain), and the run moves on. |
 
@@ -85,9 +87,11 @@ Saved data lives next to it: `macros/server/` (the server's macros), `macros/pla
 
 Your mod's commands show up in CommandDeck as they are. To make them better, ship a **command sidecar**: `commanddeck/commands.json` inside your jar. It adds labels, descriptions, argument types and ranges, examples, categories, a danger flag (`confirm` or `save_risk`), and preset macros that appear as buttons. When CommandDeck isn't installed, nothing reads it, so it costs your mod nothing.
 
+From 1.1.0, a preset can carry a `permission` node: players without it don't see the preset and can't run it, and a copy they save keeps the check. A mistake in one command or preset of a sidecar skips only that entry, with a warning in the server log, instead of the whole file.
+
 The format, its JSON schema and a complete example are in [`template/`](template/README.md). Server owners can override a mod's sidecar with their own file in `mods/Hledjolf_CommandDeck/sidecars/`.
 
-Other mods can also run command lines and macros through CommandDeck's integration API (`commanddeck.api.Deck`), with the same rules as a button press.
+Other mods can also run command lines and macros through CommandDeck's integration API (`commanddeck.api.Deck`), with the same rules as a button press. API 1.1 (CommandDeck 1.1.0) adds a run's target (`{target}`) and `macros(presser, category)`, which lists what a player can run so your mod can build its own buttons. Check `apiVersion()` before using them.
 
 ## License
 

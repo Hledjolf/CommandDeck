@@ -1,5 +1,7 @@
 package commanddeck.macro;
 
+import java.util.function.Supplier;
+
 /**
  * Fills {@code {self}}, {@code {target}}, {@code {x}} {@code {y}} {@code {z}} and {@code {look}} from the
  * presser's context. Only {@code {name}} with lowercase letters is a
@@ -15,11 +17,22 @@ public final class Placeholders {
     /**
      * What a placeholder can be filled from. {@code target} null means the presser; {@code position} and
      * {@code look} null mean the game can't tell right now. {@code floorCoordinates} is the game's choice
-     * (true on Hytale: whole blocks).
+     * (true on Hytale: whole blocks). {@code lookup}, when {@code look} is null, finds it only if a line asks for
+     * {@code {look}}, because finding it can cost the game a moment; it may be null, and may return null.
      */
-    public record Context(String self, String target, Position position, String look, boolean floorCoordinates) {
+    public record Context(String self, String target, Position position, String look, boolean floorCoordinates,
+                          Supplier<String> lookup) {
+        public Context(String self, String target, Position position, String look, boolean floorCoordinates) {
+            this(self, target, position, look, floorCoordinates, null);
+        }
+
         public static Context of(String self, Position position) {
             return new Context(self, null, position, null, true);
+        }
+
+        /** The same context for a run's target. */
+        public Context withTarget(String targetName) {
+            return new Context(self, targetName, position, look, floorCoordinates, lookup);
         }
     }
 
@@ -109,7 +122,8 @@ public final class Placeholders {
             case "z":
                 return ctx.position() == null ? null : coord(ctx.position().z(), ctx.floorCoordinates());
             case "look":
-                return ctx.look();
+                if (ctx.look() != null || ctx.lookup() == null) return ctx.look();
+                return ctx.lookup().get();
             default:
                 return null;
         }
