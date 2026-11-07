@@ -1,0 +1,94 @@
+// A loop in the macro editor: #Kind picks Repeat, While or Until; #Input is how many times, or for While and
+// Until the most times, blank for the server's limit, which #Limit shows. The buttons are StepRow's. Nothing on
+// the first line wraps, so it keeps StepRow's fixed height; a problem goes in #Problem under it, which wraps and
+// lets the row grow.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Bottom: 4);
+
+  Group {
+    LayoutMode: Left;
+    Anchor: (Height: 40);
+
+    Label #Depth {
+      Text: "";
+      Anchor: (Width: 60, Right: 4);
+      Style: (FontSize: 16, RenderBold: true, TextColor: #7a9cc6, VerticalAlignment: Center, HorizontalAlignment: End);
+    }
+
+    // The width is set here, as for the window's "Show:": Common.ui's @DropdownBox is 330 wide otherwise.
+    $C.@DropdownBox #Kind {
+      Anchor: (Width: 110, Height: 32, Top: 4, Right: 8);
+
+      // Vanilla uppercases every dropdown text; keep the case, as everywhere in the window.
+      Style: (
+        ...$C.@DefaultDropdownBoxStyle,
+        LabelStyle: (...$C.@DefaultDropdownBoxLabelStyle, RenderUppercase: false),
+        EntryLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, RenderUppercase: false),
+        NoItemsLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, TextColor: #b7cedd(0.5), RenderUppercase: false),
+        SelectedEntryLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, RenderBold: true, RenderUppercase: false)
+      );
+    }
+
+    Label #Label {
+      Text: "";
+      Anchor: (Width: 80, Right: 4);
+      Style: (FontSize: 13, TextColor: #878e9c, VerticalAlignment: Center);
+    }
+
+    $C.@TextField #Input {
+      @Anchor = (Right: 8);
+      FlexWeight: 1;
+    }
+
+    Label #Limit {
+      Text: "";
+      Anchor: (Width: 90, Right: 8);
+      Style: (FontSize: 13, TextColor: #878e9c, VerticalAlignment: Center);
+    }
+
+    $C.@SmallSecondaryTextButton #Up {
+      @Text = "Up";
+      @Anchor = (Width: 52, Top: 4, Right: 4);
+      Padding: (Horizontal: 0);
+    }
+
+    $C.@SmallSecondaryTextButton #Down {
+      @Text = "Down";
+      @Anchor = (Width: 64, Top: 4, Right: 4);
+      Padding: (Horizontal: 0);
+    }
+
+    $C.@SmallSecondaryTextButton #Out {
+      @Text = "<";
+      @Anchor = (Width: 40, Top: 4, Right: 4);
+      Padding: (Horizontal: 0);
+    }
+
+    $C.@SmallSecondaryTextButton #In {
+      @Text = ">";
+      @Anchor = (Width: 40, Top: 4, Right: 4);
+      Padding: (Horizontal: 0);
+    }
+
+    $C.@SmallSecondaryTextButton #Del {
+      @Text = "X";
+      @Anchor = (Width: 40, Top: 4);
+      Padding: (Horizontal: 0);
+    }
+  }
+
+  Group {
+    LayoutMode: Top;
+    Padding: (Left: 64);
+
+    Label #Problem {
+      Text: "";
+      Visible: false;
+      Anchor: (Top: 2);
+      Style: (FontSize: 13, TextColor: #e8a93b, Wrap: true);
+    }
+  }
+}

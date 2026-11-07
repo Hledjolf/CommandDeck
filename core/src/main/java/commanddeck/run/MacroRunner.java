@@ -7,6 +7,7 @@ import commanddeck.api.RunResult.End;
 import commanddeck.api.RunStatus;
 import commanddeck.api.StepEvent;
 import commanddeck.api.StopPoint;
+import commanddeck.macro.ConditionPort;
 import commanddeck.macro.Limits;
 import commanddeck.macro.Node;
 import commanddeck.macro.Placeholders;
@@ -16,8 +17,12 @@ import java.util.List;
 /**
  * Runs one macro body on the game's tick. A state machine over an explicit stack
  * of frames: it never blocks and never sleeps. Each {@link #tick} call does at most {@code steps_per_tick}
- * command steps. {@code sequence} and {@code repeat} cost nothing; a {@code wait} occupies whole ticks, and
+ * command steps. {@code sequence}, {@code repeat} and a resolved {@code call} cost nothing; a {@code wait} occupies whole ticks, and
  * the next step runs on the tick after it ends.
+ *
+ * <p>A loop's check ({@code while}, {@code until}) costs no tick either: it's answered at the start of the slot in
+ * which the loop's next step would run, so it sees the game as that step would. A pass in which no command or wait
+ * ran ends the tick, so a loop can never spin inside one.
  *
  * <p>The next leaf (command or wait) is always looked up in advance, so the run finishes on the tick of its
  * last step, and a stopped run can say which line would have run next.
@@ -33,11 +38,19 @@ public final class MacroRunner {
         }
     }
 
-    /** A node on the stack: for a sequence the next child index, for a repeat the iterations started. */
+    /** A node on the stack: for a sequence the next child index, for a repeat or a loop the passes started. */
     private static final class Frame {
         final Node node;
         final String path;
         long counter;
+        /** A loop's answered check, waiting for {@link #nextLeaf} to act on it; null when there's none. */
+        Boolean holds;
+        /** A loop that has made all the passes it may. */
+        boolean atLimit;
+        /** Commands and waits taken when the loop's current pass started, to tell an empty pass. */
+        long takenAtPassStart;
+        /** For an empty pass: the tick from which its check may be answered (0 until the pass is found empty). */
+        long checkFrom;
 
         Frame(Node node, String path) {
             this.node = node;
@@ -68,6 +81,11 @@ public final class MacroRunner {
     private long waitTicksLeft;
     private long waitUntilMillis = -1;
     private String stopReason;
+    private ConditionPort conditions;
+    private String actorId;
+    private String targetId;
+    /** How many commands and waits the run has taken, so a loop can tell a pass in which nothing ran. */
+    private long taken;
     private boolean started;
     private long startedTick;
     private long startedMillis;
@@ -85,6 +103,16 @@ public final class MacroRunner {
         this.log = log == null ? RunLog.NONE : log;
         stack.add(new Frame(body, "body"));
         next = nextLeaf();
+    }
+
+    /**
+     * The game's condition library, and who the run's conditions are about ({@code {self}} and {@code {target}}),
+     * for {@code while} and {@code until}. Without it, a loop's check is UNKNOWN and stops the run.
+     */
+    public void useConditions(ConditionPort conditions, String actorId, String targetId) {
+        this.conditions = conditions;
+        this.actorId = actorId;
+        this.targetId = targetId;
     }
 
     /** Ask for a stop before the next step: {@code stop_requested}, or {@code stopped_by_operator}. */
@@ -173,6 +201,12 @@ public final class MacroRunner {
                 finish(End.COMPLETED, null, null, tick, null);
                 return;
             }
+            if (leaf.node() instanceof Node.Loop) {
+                if (!check(leaf, tick)) return;
+                next = nextLeaf();
+                continue;
+            }
+            taken++;
             next = nextLeaf();
             if (leaf.node() instanceof Node.Wait) {
                 Node.Wait w = (Node.Wait) leaf.node();
@@ -209,6 +243,39 @@ public final class MacroRunner {
                 return;
             }
         }
+    }
+
+    /**
+     * Answers the loop check {@code leaf} stands for, or ends the run (its limit, or UNKNOWN). False when nothing
+     * more happens this tick: the run ended, or the pass was empty and the check waits for the next tick.
+     */
+    private boolean check(Leaf leaf, long tick) {
+        Frame f = stack.get(stack.size() - 1);
+        Node.Loop l = (Node.Loop) leaf.node();
+        if (f.atLimit) {
+            finish(End.LIMIT, "max_iterations", "The " + l.type() + " at " + leaf.path() + " made its " + f.counter + " passes", tick, pointAt(leaf));
+            return false;
+        }
+        boolean emptyPass = f.counter > 0 && taken == f.takenAtPassStart;
+        if (emptyPass) {
+            if (f.checkFrom == 0) f.checkFrom = tick + 1;
+            if (tick < f.checkFrom) return false;
+        }
+        ConditionPort.Result r;
+        try {
+            r = conditions == null ? new ConditionPort.Result(ConditionPort.Answer.UNKNOWN, "conditions can't be answered here")
+                : conditions.evaluate(l.condition(), actorId, targetId, tick);
+        } catch (RuntimeException e) {
+            r = new ConditionPort.Result(ConditionPort.Answer.UNKNOWN, "the check failed: " + e);
+        }
+        if (r == null || r.answer() == ConditionPort.Answer.UNKNOWN) {
+            String why = r == null || r.reason() == null ? "no reason given" : r.reason();
+            finish(End.ERROR, "condition_unknown", "The " + l.type() + " condition at " + leaf.path() + " couldn't be answered: " + why,
+                tick, pointAt(leaf));
+            return false;
+        }
+        f.holds = r.answer() == ConditionPort.Answer.TRUE;
+        return true;
     }
 
     /** Records the answered command. False if the run ended because the game refused it or it failed. */
@@ -272,6 +339,12 @@ public final class MacroRunner {
                 } else {
                     stack.remove(stack.size() - 1);
                 }
+            } else if (n instanceof Node.Call) {
+                // A call costs nothing: its copied-in body runs in place, and paths cross it with its reference.
+                Node.Call c = (Node.Call) n;
+                stack.remove(stack.size() - 1);
+                if (c.body() == null) throw new IllegalStateException("A call at " + f.path + " wasn't resolved before the run");
+                stack.add(new Frame(c.body(), f.path + ">" + c.ref() + ">body"));
             } else if (n instanceof Node.Repeat) {
                 Node.Repeat r = (Node.Repeat) n;
                 if (f.counter < r.times()) {
@@ -280,14 +353,35 @@ public final class MacroRunner {
                 } else {
                     stack.remove(stack.size() - 1);
                 }
+            } else if (n instanceof Node.Loop) {
+                Node.Loop l = (Node.Loop) n;
+                if (f.holds == null) {
+                    // until runs its first pass unchecked; every other pass waits for its check.
+                    if (l.until() && f.counter == 0) {
+                        startPass(f, l);
+                        continue;
+                    }
+                    return new Leaf(n, f.path, (int) f.counter, (int) maxPasses(l));
+                }
+                boolean again = f.holds != l.until();
+                f.holds = null;
+                if (!again) {
+                    stack.remove(stack.size() - 1);
+                } else if (f.counter >= maxPasses(l)) {
+                    f.atLimit = true;
+                    return new Leaf(n, f.path, (int) f.counter, (int) maxPasses(l));
+                } else {
+                    startPass(f, l);
+                }
             } else {
                 stack.remove(stack.size() - 1);
                 int iteration = 0;
                 int iterations = 0;
                 for (int i = stack.size() - 1; i >= 0; i--) {
-                    if (stack.get(i).node instanceof Node.Repeat) {
+                    Node outer = stack.get(i).node;
+                    if (outer instanceof Node.Repeat || outer instanceof Node.Loop) {
                         iteration = (int) stack.get(i).counter;
-                        iterations = (int) ((Node.Repeat) stack.get(i).node).times();
+                        iterations = (int) (outer instanceof Node.Repeat ? ((Node.Repeat) outer).times() : maxPasses((Node.Loop) outer));
                         break;
                     }
                 }
@@ -295,5 +389,17 @@ public final class MacroRunner {
             }
         }
         return null;
+    }
+
+    private void startPass(Frame f, Node.Loop l) {
+        f.counter++;
+        f.takenAtPassStart = taken;
+        f.checkFrom = 0;
+        stack.add(new Frame(l.body(), f.path + ".body"));
+    }
+
+    /** A loop's own limit, or the operator's. */
+    private long maxPasses(Node.Loop l) {
+        return l.maxIterations() > 0 ? Math.min(l.maxIterations(), limits.maxIterations()) : limits.maxIterations();
     }
 }

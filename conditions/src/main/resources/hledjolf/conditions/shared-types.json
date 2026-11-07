@@ -1,0 +1,722 @@
+{
+ "$defs": {
+  "item_count": {
+   "type": "object",
+   "required": [
+    "type",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "item_count"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "item": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "tag": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "integer",
+     "minimum": 0
+    }
+   },
+   "oneOf": [
+    {
+     "required": [
+      "item"
+     ]
+    },
+    {
+     "required": [
+      "tag"
+     ]
+    }
+   ]
+  },
+  "stat": {
+   "type": "object",
+   "required": [
+    "type",
+    "stat",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "stat"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "stat": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "unit": {
+     "enum": [
+      "points",
+      "percent"
+     ],
+     "default": "points"
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 100000000000,
+     "x-decimals": 3
+    }
+   }
+  },
+  "health": {
+   "type": "object",
+   "required": [
+    "type",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "health"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "unit": {
+     "enum": [
+      "points",
+      "percent"
+     ],
+     "default": "points"
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 100000000000,
+     "x-decimals": 3
+    }
+   }
+  },
+  "time_of_day": {
+   "type": "object",
+   "required": [
+    "type",
+    "from",
+    "to"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "time_of_day"
+    },
+    "from": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 24,
+     "x-decimals": 3
+    },
+    "to": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 24,
+     "x-decimals": 3
+    }
+   }
+  },
+  "distance": {
+   "type": "object",
+   "required": [
+    "type",
+    "to",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "distance"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "to": {
+     "oneOf": [
+      {
+       "type": "array",
+       "items": {
+        "type": "number",
+        "minimum": -100000000000,
+        "maximum": 100000000000,
+        "x-decimals": 3
+       },
+       "minItems": 2,
+       "maxItems": 3
+      },
+      {
+       "type": "string"
+      }
+     ]
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 100000000000,
+     "x-decimals": 3
+    }
+   }
+  },
+  "in_area": {
+   "type": "object",
+   "required": [
+    "type",
+    "min",
+    "max"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "in_area"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "min": {
+     "type": "array",
+     "items": {
+      "type": "number",
+      "minimum": -100000000000,
+      "maximum": 100000000000,
+      "x-decimals": 3
+     },
+     "minItems": 2,
+     "maxItems": 3
+    },
+    "max": {
+     "type": "array",
+     "items": {
+      "type": "number",
+      "minimum": -100000000000,
+      "maximum": 100000000000,
+      "x-decimals": 3
+     },
+     "minItems": 2,
+     "maxItems": 3
+    },
+    "world": {
+     "type": "string"
+    }
+   }
+  },
+  "counter": {
+   "type": "object",
+   "required": [
+    "type",
+    "name",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "counter"
+    },
+    "name": {
+     "type": "string",
+     "pattern": "^[a-z0-9_]+$"
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "integer"
+    }
+   }
+  },
+  "player_online": {
+   "type": "object",
+   "required": [
+    "type",
+    "subject"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "player_online"
+    },
+    "subject": {
+     "type": "string"
+    }
+   }
+  },
+  "is_night": {
+   "type": "object",
+   "required": [
+    "type"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "is_night"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    }
+   }
+  },
+  "weather": {
+   "type": "object",
+   "required": [
+    "type",
+    "category"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "weather"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "category": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*:.+$"
+     }
+    }
+   }
+  },
+  "zone": {
+   "type": "object",
+   "required": [
+    "type",
+    "in"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "zone"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "in": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*:.+$"
+     }
+    }
+   }
+  },
+  "in_fluid": {
+   "type": "object",
+   "required": [
+    "type",
+    "fluid"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "in_fluid"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "fluid": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*:.+$"
+     }
+    }
+   }
+  },
+  "near_fluid": {
+   "type": "object",
+   "required": [
+    "type",
+    "fluid",
+    "radius"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "near_fluid"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "fluid": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*:.+$"
+     }
+    },
+    "radius": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 100000000000,
+     "x-decimals": 3
+    }
+   }
+  },
+  "near_entity": {
+   "type": "object",
+   "required": [
+    "type",
+    "radius",
+    "op",
+    "value"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "near_entity"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "tag": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "id": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "owner": {
+     "type": "string"
+    },
+    "radius": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 100000000000,
+     "x-decimals": 3
+    },
+    "op": {
+     "enum": [
+      "eq",
+      "ne",
+      "lt",
+      "le",
+      "gt",
+      "ge"
+     ]
+    },
+    "value": {
+     "type": "integer",
+     "minimum": 0
+    }
+   },
+   "oneOf": [
+    {
+     "required": [
+      "tag"
+     ]
+    },
+    {
+     "required": [
+      "id"
+     ]
+    }
+   ]
+  },
+  "wielding": {
+   "type": "object",
+   "required": [
+    "type"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "wielding"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "item": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "tag": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    }
+   },
+   "oneOf": [
+    {
+     "required": [
+      "item"
+     ]
+    },
+    {
+     "required": [
+      "tag"
+     ]
+    }
+   ]
+  },
+  "wearing": {
+   "type": "object",
+   "required": [
+    "type"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "wearing"
+    },
+    "subject": {
+     "type": "string",
+     "default": "{self}"
+    },
+    "item": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    },
+    "tag": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*:.+$"
+    }
+   },
+   "oneOf": [
+    {
+     "required": [
+      "item"
+     ]
+    },
+    {
+     "required": [
+      "tag"
+     ]
+    }
+   ]
+  },
+  "all": {
+   "type": "object",
+   "required": [
+    "type",
+    "of"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "all"
+    },
+    "of": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "$ref": "#/$defs/condition"
+     }
+    }
+   }
+  },
+  "any": {
+   "type": "object",
+   "required": [
+    "type",
+    "of"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "any"
+    },
+    "of": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "$ref": "#/$defs/condition"
+     }
+    }
+   }
+  },
+  "not": {
+   "type": "object",
+   "required": [
+    "type",
+    "of"
+   ],
+   "additionalProperties": false,
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "const": "not"
+    },
+    "of": {
+     "$ref": "#/$defs/condition"
+    }
+   }
+  },
+  "condition": {
+   "anyOf": [
+    {
+     "$ref": "#/$defs/item_count"
+    },
+    {
+     "$ref": "#/$defs/stat"
+    },
+    {
+     "$ref": "#/$defs/health"
+    },
+    {
+     "$ref": "#/$defs/time_of_day"
+    },
+    {
+     "$ref": "#/$defs/distance"
+    },
+    {
+     "$ref": "#/$defs/in_area"
+    },
+    {
+     "$ref": "#/$defs/counter"
+    },
+    {
+     "$ref": "#/$defs/player_online"
+    },
+    {
+     "$ref": "#/$defs/is_night"
+    },
+    {
+     "$ref": "#/$defs/weather"
+    },
+    {
+     "$ref": "#/$defs/zone"
+    },
+    {
+     "$ref": "#/$defs/in_fluid"
+    },
+    {
+     "$ref": "#/$defs/near_fluid"
+    },
+    {
+     "$ref": "#/$defs/near_entity"
+    },
+    {
+     "$ref": "#/$defs/wielding"
+    },
+    {
+     "$ref": "#/$defs/wearing"
+    },
+    {
+     "$ref": "#/$defs/all"
+    },
+    {
+     "$ref": "#/$defs/any"
+    },
+    {
+     "$ref": "#/$defs/not"
+    },
+    {
+     "$ref": "#/$defs/namespaced"
+    }
+   ]
+  },
+  "namespaced": {
+   "type": "object",
+   "required": [
+    "type"
+   ],
+   "x-since": "1.2",
+   "properties": {
+    "type": {
+     "type": "string",
+     "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    }
+   }
+  }
+ }
+}

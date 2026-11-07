@@ -18,6 +18,7 @@ final class Settings {
     private boolean everyoneInSingleplayer = true;
     private boolean plainSender = false;
     private int commandTimeoutSeconds = 10;
+    private int conditionBudgetMs = 2;
     private Limits limits = Limits.DEFAULTS;
 
     boolean enabled() {
@@ -35,6 +36,11 @@ final class Settings {
 
     int commandTimeoutSeconds() {
         return commandTimeoutSeconds;
+    }
+
+    /** How long one condition check from another mod's type may take before it counts as unanswered. */
+    int conditionBudgetMs() {
+        return conditionBudgetMs;
     }
 
     Limits limits() {
@@ -68,7 +74,9 @@ final class Settings {
             integer(m, "MaxDepth", d.maxDepth(), 1, 64, warnings), integer(m, "MaxRuntimeSeconds", d.maxRuntimeSeconds(), 1, 86_400, warnings),
             integer(m, "StepsPerTick", d.stepsPerTick(), 1, 100, warnings),
             integer(m, "MaxRunningPerPlayer", d.maxRunningPerPlayer(), 1, 100, warnings),
-            integer(m, "MaxRunningForConsole", d.maxRunningConsole(), 1, 100, warnings));
+            integer(m, "MaxRunningForConsole", d.maxRunningConsole(), 1, 100, warnings),
+            integer(m, "MaxNodes", d.maxNodes(), 100, 1_000_000, warnings));
+        conditionBudgetMs = integer(m, "ConditionBudgetMs", 2, 1, 50, warnings);
         return warnings.length() == 0 ? null : warnings.toString().trim();
     }
 
@@ -84,6 +92,8 @@ final class Settings {
         m.put("StepsPerTick", (long) limits.stepsPerTick());
         m.put("MaxRunningPerPlayer", (long) limits.maxRunningPerPlayer());
         m.put("MaxRunningForConsole", (long) limits.maxRunningConsole());
+        m.put("MaxNodes", (long) limits.maxNodes());
+        m.put("ConditionBudgetMs", (long) conditionBudgetMs);
         return m;
     }
 

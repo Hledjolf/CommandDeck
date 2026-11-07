@@ -5,7 +5,7 @@ import java.util.List;
 /** The integration API: run command lines and macros as a given player, with every
  * rule a button press in CommandDeck's window has. */
 public interface Deck {
-    String API_VERSION = "1.1";
+    String API_VERSION = "1.2";
 
     String apiVersion();
 

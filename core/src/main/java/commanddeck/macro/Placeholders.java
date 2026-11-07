@@ -1,27 +1,42 @@
 package commanddeck.macro;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
  * Fills {@code {self}}, {@code {target}}, {@code {x}} {@code {y}} {@code {z}} and {@code {look}} from the
- * presser's context. Only {@code {name}} with lowercase letters is a
+ * presser's context; {@code {z}} only on a game with three coordinates. Only {@code {name}} with lowercase letters is a
  * placeholder, so JSON such as {@code {"a":1}} in a line is left alone. An unknown placeholder, or one that
  * can't be filled now, is a {@code placeholder} problem; it is never left in the line.
  */
 public final class Placeholders {
     private Placeholders() {}
 
-    /** The presser's position in game units. */
-    public record Position(double x, double y, double z) {}
+    /** Every coordinate a game can have, in order; a game has the first two or all three. */
+    public static final List<String> COORDINATES = List.of("x", "y", "z");
+
+    /** The presser's position in game units. On a game with two coordinates, {@code z} is unused. */
+    public record Position(double x, double y, double z) {
+        public Position(double x, double y) {
+            this(x, y, 0);
+        }
+    }
 
     /**
      * What a placeholder can be filled from. {@code target} null means the presser; {@code position} and
      * {@code look} null mean the game can't tell right now. {@code floorCoordinates} is the game's choice
      * (true on Hytale: whole blocks). {@code lookup}, when {@code look} is null, finds it only if a line asks for
      * {@code {look}}, because finding it can cost the game a moment; it may be null, and may return null.
+     * {@code coordinates} is how many the game has, 2 or 3 (the first of {@link #COORDINATES}): a placeholder
+     * for one it lacks is never filled.
      */
     public record Context(String self, String target, Position position, String look, boolean floorCoordinates,
-                          Supplier<String> lookup) {
+                          Supplier<String> lookup, int coordinates) {
+        public Context(String self, String target, Position position, String look, boolean floorCoordinates,
+                       Supplier<String> lookup) {
+            this(self, target, position, look, floorCoordinates, lookup, 3);
+        }
+
         public Context(String self, String target, Position position, String look, boolean floorCoordinates) {
             this(self, target, position, look, floorCoordinates, null);
         }
@@ -32,7 +47,12 @@ public final class Placeholders {
 
         /** The same context for a run's target. */
         public Context withTarget(String targetName) {
-            return new Context(self, targetName, position, look, floorCoordinates, lookup);
+            return new Context(self, targetName, position, look, floorCoordinates, lookup, coordinates);
+        }
+
+        /** The same context on a game with this many coordinates. */
+        public Context withCoordinates(int count) {
+            return new Context(self, target, position, look, floorCoordinates, lookup, count);
         }
     }
 
@@ -71,7 +91,8 @@ public final class Placeholders {
             String value = value(name, ctx);
             if (value == null) {
                 boolean known = isKnown(name);
-                String why = known ? "{" + name + "} can't be filled right now" : "{" + name + "} is not a placeholder";
+                String why = !known ? "{" + name + "} is not a placeholder"
+                    : lacks(name, ctx) ? "{" + name + "} isn't a coordinate in this game" : "{" + name + "} can't be filled right now";
                 return new Rendered(null, Problem.of("placeholder", why, "name", name, "position", (long) i, "known", known));
             }
             if (escaper != null) {
@@ -109,7 +130,14 @@ public final class Placeholders {
         }
     }
 
+    /** Is this a coordinate the game doesn't have? */
+    private static boolean lacks(String name, Context ctx) {
+        int i = COORDINATES.indexOf(name);
+        return i >= ctx.coordinates();
+    }
+
     private static String value(String name, Context ctx) {
+        if (lacks(name, ctx)) return null;
         switch (name) {
             case "self":
                 return ctx.self();

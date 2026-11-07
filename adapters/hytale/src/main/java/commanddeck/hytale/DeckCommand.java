@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import commanddeck.window.RunText;
 
 /**
  * {@code /deck}: run a saved macro or preset by id, confirm one that asks first, stop your runs (operators:
@@ -70,6 +71,10 @@ final class DeckCommand extends AbstractAsyncCommand {
         List<String> out = new ArrayList<>();
         try {
             handle(presser, args, out);
+        } catch (Refused e) {
+            // The game counts a CommandException as the command refusing, which ends a run at this step.
+            for (String l : out) context.sendMessage(Message.raw(l));
+            throw e;
         } catch (RuntimeException e) {
             plugin.getLogger().atSevere().withCause(e).log("[CommandDeck] /deck failed");
             out.add("/deck failed: " + e.getMessage());
@@ -121,6 +126,13 @@ final class DeckCommand extends AbstractAsyncCommand {
                     out.add(plugin.reload());
                 }
                 return;
+            case "alive":
+                if (args.size() != 2) {
+                    out.add("Usage: /deck alive <player>");
+                } else {
+                    alive(args.get(1), out);
+                }
+                return;
             case "":
                 openWindow(presser, out);
                 return;
@@ -150,14 +162,50 @@ final class DeckCommand extends AbstractAsyncCommand {
         out.add("/deck stop: stop your runs. /deck stop all: everyone's (operators)");
         out.add("/deck list: what you can run, and your runs");
         out.add("/deck reload: read the sidecars, macros and settings again (operators)");
+        out.add("/deck alive <player>: fails unless that player is online and alive, so a macro stops there");
+    }
+
+    /**
+     * {@code /deck alive <player>}: says so if the player is online and alive, and otherwise fails as a command
+     * refusing, so a macro such as the {@code heal} preset stops before it touches a dead or absent player.
+     */
+    private static void alive(String who, List<String> out) {
+        PlayerRef p = HytaleFacts.player(who);
+        if (p == null) throw new Refused(who + " isn't online");
+        Boolean alive = HytaleGame.alive(p);
+        if (alive == null) throw new Refused("Can't tell whether " + p.getUsername() + " is alive");
+        if (!alive) throw new Refused(p.getUsername() + " is dead");
+        out.add(p.getUsername() + " is alive");
+    }
+
+    /**
+     * A refusal from {@code /deck alive} or {@code /deck run}: the command fails, so a run or a playtest step that
+     * sent it sees a failure rather than a chat line.
+     */
+    static final class Refused extends com.hypixel.hytale.server.core.command.system.exceptions.CommandException {
+        private static final long serialVersionUID = 1L;
+        private final String text;
+
+        Refused(String text) {
+            this.text = text;
+        }
+
+        @Override
+        public String getMessage() {
+            return text;
+        }
+
+        @Override
+        public void sendTranslatedMessage(com.hypixel.hytale.server.core.command.system.CommandSender sender) {
+            sender.sendMessage(Message.raw(text));
+        }
     }
 
     private void run(Presser presser, RunRequest request, String token, List<String> out) {
         if (token == null) {
             CheckResult c = plugin.deck().check(presser, request);
             if (!c.ok()) {
-                out.add("Can't run that: " + c.refusal().message());
-                return;
+                throw new Refused("Can't run that: " + c.refusal().message());
             }
             if (c.needsConfirmation()) {
                 waiting.put(presser.id(), new Waiting(request, c.confirmToken(), System.currentTimeMillis() + CONFIRM_MILLIS));
@@ -167,10 +215,9 @@ final class DeckCommand extends AbstractAsyncCommand {
         }
         StartResult s = plugin.deck().start(presser, request, new Reporter(presser), token);
         if (!s.started()) {
-            out.add("Can't run that: " + s.refusal().message());
-        } else {
-            out.add("Started run " + s.runId() + ".");
+            throw new Refused("Can't run that: " + s.refusal().message());
         }
+        out.add("Started run " + s.runId() + ".");
     }
 
     private void list(Presser presser, List<String> out) {

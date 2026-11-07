@@ -26,12 +26,33 @@
     },
     "MaxIterations": {
       "label": "Most repeats",
-      "description": "The highest count a repeat may have.",
+      "description": "The highest count a repeat may have, and the most passes a while or until loop may make.",
       "section": "limits",
       "type": "int",
       "min": 1,
       "max": 100000,
       "default": 100,
+      "restart": false
+    },
+    "MaxNodes": {
+      "label": "Largest macro (steps)",
+      "description": "How many steps a run may have once every macro it calls is filled in. A run over it is refused before it starts.",
+      "section": "limits",
+      "type": "int",
+      "min": 100,
+      "max": 1000000,
+      "step": 1000,
+      "default": 10000,
+      "restart": false
+    },
+    "ConditionBudgetMs": {
+      "label": "Time for one condition check (ms)",
+      "description": "How long another mod's condition check may take. A slower one counts as unanswered, which stops a while or until loop.",
+      "section": "limits",
+      "type": "int",
+      "min": 1,
+      "max": 50,
+      "default": 2,
       "restart": false
     },
     "MaxDepth": {

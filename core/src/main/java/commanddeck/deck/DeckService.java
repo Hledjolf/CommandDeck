@@ -18,6 +18,7 @@ import commanddeck.command.CommandCatalog;
 import commanddeck.command.CommandInfo;
 import commanddeck.command.Danger;
 import commanddeck.command.Preset;
+import commanddeck.macro.Calls;
 import commanddeck.macro.Limits;
 import commanddeck.macro.Macro;
 import commanddeck.macro.MacroReader;
@@ -27,7 +28,6 @@ import commanddeck.macro.Placeholders;
 import commanddeck.macro.Problem;
 import commanddeck.run.MacroRunner;
 import commanddeck.run.RunLog;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -58,7 +58,6 @@ public final class DeckService implements Deck {
     private final Supplier<CommandCatalog> catalog;
     private final RunLog log;
     private final LongSupplier clock;
-    private final SecureRandom random = new SecureRandom();
     private final String idPrefix;
 
     private Limits limits = Limits.DEFAULTS;
@@ -159,9 +158,9 @@ public final class DeckService implements Deck {
      * {@code targetName} are null when the run is for the presser.
      */
     private record Prepared(Refusal refusal, Node body, String macroId, List<PreviewLine> preview, boolean needsConfirmation,
-                            String prompt, boolean saveRisk, String targetId, String targetName) {
+                            String prompt, boolean saveRisk, String targetId, String targetName, List<String> called) {
         static Prepared refused(Refusal r, List<PreviewLine> preview) {
-            return new Prepared(r, null, null, preview, false, null, false, null, null);
+            return new Prepared(r, null, null, preview, false, null, false, null, null, List.of());
         }
     }
 
@@ -201,7 +200,7 @@ public final class DeckService implements Deck {
         if (p.refusal() != null) return new CheckResult(false, p.refusal(), p.preview(), false, null, false, null);
         String token = null;
         if (p.needsConfirmation()) {
-            token = newToken();
+            token = game.newToken();
             purgeTokens(clock.getAsLong());
             tokens.put(token, new Token(presser.id(), key(request, p.targetId()), clock.getAsLong() + TOKEN_LIFETIME_MILLIS));
         }
@@ -259,9 +258,11 @@ public final class DeckService implements Deck {
                     return game.escaper();
                 }
             }, fanout, log);
+        runner.useConditions(game.conditions(), presser.id(), targetId);
         runs.put(runId, new Run(presser, targetId, runner));
         if (p.needsConfirmation()) log.confirmed(runId, label(presser), p.prompt());
-        log.started(runId, label(presser), targetId == null ? null : targetName + " (" + targetId + ")", p.macroId(), request.source());
+        log.started(runId, label(presser), targetId == null ? null : targetName + " (" + targetId + ")", p.macroId(), request.source(),
+            p.called());
         return new StartResult(true, runId, null);
     }
 
@@ -304,6 +305,7 @@ public final class DeckService implements Deck {
         CommandCatalog cat = catalog.get();
         List<Node> nodes = new ArrayList<>();
         List<String> askFirst = new ArrayList<>();
+        List<String> called = new ArrayList<>();
         String macroId = null;
         for (int i = 0; i < request.items().size(); i++) {
             RunItem item = request.items().get(i);
@@ -324,19 +326,28 @@ public final class DeckService implements Deck {
                 case MACRO_REF: {
                     Found f = resolve(presser, cat, item.value(), i, where);
                     if (f.refusal() != null) return Prepared.refused(f.refusal(), List.of());
-                    nodes.add(f.body());
-                    if (f.dangerous()) askFirst.add(f.name());
-                    if (!holds(presser, f.permission())) {
-                        return Prepared.refused(new Refusal("no_permission", presser.name() + " doesn't have permission to run " + f.name() + where,
-                            "permission=" + f.permission()), List.of());
+                    Calls.Target t = f.target();
+                    if (t.dangerous()) askFirst.add(t.name());
+                    if (!holds(presser, t.permission())) {
+                        return Prepared.refused(new Refusal("no_permission", presser.name() + " doesn't have permission to run " + t.name() + where,
+                            "permission=" + t.permission()), List.of());
                     }
-                    if (request.items().size() == 1) macroId = f.id();
+                    // Then every call inside it, at its place in tree order.
+                    Calls.Expanded x = Calls.expand(t.body(), t.ref(), item.value(), t.place(), lookup(presser, cat), perm -> holds(presser, perm), limits.maxNodes());
+                    if (!x.ok()) return Prepared.refused(refusal(x.problem(), where), List.of());
+                    nodes.add(x.body());
+                    noteCalled(x.called(), askFirst, called);
+                    if (request.items().size() == 1) macroId = t.id();
                     break;
                 }
                 case MACRO_JSON: {
                     MacroReader.Result<Node> r = MacroReader.readNodeText(item.value());
                     if (!r.ok()) return Prepared.refused(refusal(r.problem(), where), List.of());
-                    nodes.add(r.value());
+                    // A body sent as JSON is the presser's own, so its plain ids look where the presser's macros do.
+                    Calls.Expanded x = Calls.expand(r.value(), null, null, Calls.Place.PLAYER, lookup(presser, cat), perm -> holds(presser, perm), limits.maxNodes());
+                    if (!x.ok()) return Prepared.refused(refusal(x.problem(), where), List.of());
+                    nodes.add(x.body());
+                    noteCalled(x.called(), askFirst, called);
                     break;
                 }
                 default:
@@ -345,7 +356,7 @@ public final class DeckService implements Deck {
         }
         // Several items run as if wrapped in a sequence, and depth counts that sequence.
         Node body = nodes.size() == 1 ? nodes.get(0) : new Node.Sequence(List.copyOf(nodes), null);
-        Problem limitProblem = MacroValidator.check(body, limits);
+        Problem limitProblem = MacroValidator.check(body, limits, game.conditions());
         if (limitProblem != null) return Prepared.refused(refusal(limitProblem, ""), List.of());
 
         Placeholders.Context ctx = game.context(presser);
@@ -366,6 +377,7 @@ public final class DeckService implements Deck {
                 continue;
             }
             Problem unsendable = game.checkLine(r.line());
+            if (unsendable == null) unsendable = game.gameSetting(presser, r.line());
             preview.add(new PreviewLine(f.path(), r.line(), unsendable == null, unsendable == null ? null : unsendable.message(),
                 game.permitted(presser, r.line())));
             if (unsendable != null && first == null) first = refusal(unsendable, "");
@@ -381,7 +393,15 @@ public final class DeckService implements Deck {
 
         boolean needs = !askFirst.isEmpty();
         String prompt = needs ? prompt(shown, askFirst, saveRisk) : null;
-        return new Prepared(null, body, macroId, List.copyOf(preview), needs, prompt, saveRisk, targetId, targetName);
+        return new Prepared(null, body, macroId, List.copyOf(preview), needs, prompt, saveRisk, targetId, targetName, List.copyOf(called));
+    }
+
+    /** Every called macro that's {@code dangerous} asks first, by name; the log lists each one called, once. */
+    private static void noteCalled(List<Calls.Target> targets, List<String> askFirst, List<String> called) {
+        for (Calls.Target t : targets) {
+            if (t.dangerous() && !askFirst.contains(t.name())) askFirst.add(t.name());
+            if (!called.contains(t.ref())) called.add(t.ref());
+        }
     }
 
     /** The request's target id, or null when it names nobody or the presser themselves. */
@@ -415,68 +435,32 @@ public final class DeckService implements Deck {
         return b.toString();
     }
 
-    /** What a {@code MACRO_REF} names: a saved macro or a preset, or why it names nothing. */
-    private record Found(Refusal refusal, Node body, String id, String name, boolean dangerous, String permission) {
-        static Found refused(Refusal r) {
-            return new Found(r, null, null, null, false, null);
-        }
-
-        static Found of(Macro m) {
-            return new Found(null, m.body(), m.id(), m.name(), m.dangerous(), m.permission());
-        }
-
-        static Found of(Preset p) {
-            return new Found(null, p.macro(), p.id(), p.name(), false, p.permission());
-        }
-    }
+    /** What a {@code MACRO_REF} names, or why it names nothing. */
+    private record Found(Refusal refusal, Calls.Target target) {}
 
     /**
-     * A plain id is looked up in the presser's own macros, then the server's, then presets in sidecar order. A
-     * scoped reference ({@code player:<id>}, {@code server:<id>}, {@code preset:<mod id>/<id>}) names one. The
-     * scope is the text before the first ':'. A preset's mod id runs to the last '/', whatever the game's mod
-     * ids look like, because macro ids can't contain '/'.
+     * A {@code MACRO_REF} is looked up as the presser's own macro would look it up. Its shape is checked here,
+     * since a request's reference, unlike a {@code call}'s, hasn't been through the macro reader.
      */
     private Found resolve(Presser presser, CommandCatalog cat, String ref, int item, String where) {
-        Refusal unknown = new Refusal("unknown_macro", "No macro or preset called \"" + ref + "\"" + where, ref);
         int colon = ref.indexOf(':');
-        if (colon < 0) {
-            Macro m = macros.playerMacro(presser.id(), ref);
-            if (m == null) m = macros.serverMacro(ref);
-            if (m != null) return Found.of(m);
-            Preset p = firstPreset(cat, ref);
-            return p != null ? Found.of(p) : Found.refused(unknown);
+        if (colon >= 0) {
+            String scope = ref.substring(0, colon);
+            if (!scope.equals("player") && !scope.equals("server") && !scope.equals("preset")) {
+                return new Found(invalid("items/" + item, "Unknown reference scope \"" + scope + "\": use player:, server: or preset:" + where), null);
+            }
+            int slash = ref.lastIndexOf('/');
+            if (scope.equals("preset") && (slash <= colon + 1 || slash == ref.length() - 1)) {
+                return new Found(invalid("items/" + item, "A preset reference looks like preset:<mod id>/<id>" + where), null);
+            }
         }
-        String scope = ref.substring(0, colon);
-        String rest = ref.substring(colon + 1);
-        switch (scope) {
-            case "player": {
-                Macro m = macros.playerMacro(presser.id(), rest);
-                return m != null ? Found.of(m) : Found.refused(unknown);
-            }
-            case "server": {
-                Macro m = macros.serverMacro(rest);
-                return m != null ? Found.of(m) : Found.refused(unknown);
-            }
-            case "preset": {
-                int slash = rest.lastIndexOf('/');
-                if (slash <= 0 || slash == rest.length() - 1) {
-                    return Found.refused(invalid("items/" + item, "A preset reference looks like preset:<mod id>/<id>" + where));
-                }
-                Preset p = cat == null ? null : cat.presets().get(rest);
-                return p != null ? Found.of(p) : Found.refused(unknown);
-            }
-            default:
-                return Found.refused(invalid("items/" + item, "Unknown reference scope \"" + scope + "\": use player:, server: or preset:" + where));
-        }
+        Calls.Target t = MacroLookup.find(macros, cat, presser.id(), ref, Calls.Place.PLAYER);
+        return t != null ? new Found(null, t)
+            : new Found(new Refusal("unknown_macro", "No macro or preset called \"" + ref + "\"" + where, ref), null);
     }
 
-    /** The first preset with this id, in sidecar order. */
-    private static Preset firstPreset(CommandCatalog cat, String id) {
-        if (cat == null) return null;
-        for (Preset p : cat.presets().values()) {
-            if (p.id().equals(id)) return p;
-        }
-        return null;
+    private Calls.Lookup lookup(Presser presser, CommandCatalog cat) {
+        return MacroLookup.lookup(macros, cat, presser.id());
     }
 
     /**
@@ -499,18 +483,29 @@ public final class DeckService implements Deck {
     }
 
     /**
-     * A refusal from a core problem. The detail is the JSON Pointer for {@code invalid}, and otherwise the
-     * problem's detail fields as {@code key=value}, space-separated, in order.
+     * A refusal from a core problem. The detail is the JSON Pointer for {@code invalid}, the reference as
+     * written for {@code unknown_macro}, and otherwise the problem's detail fields as {@code key=value},
+     * space-separated, in order; a cycle's path is joined with {@code >} ({@code path=a>b>a}).
      */
     static Refusal refusal(Problem p, String where) {
         String detail;
         if ("invalid".equals(p.code())) {
             detail = String.valueOf(p.detail().get("pointer"));
+        } else if ("unknown_macro".equals(p.code()) && p.detail().containsKey("macro")) {
+            detail = String.valueOf(p.detail().get("macro"));
         } else {
             StringBuilder b = new StringBuilder();
             for (Map.Entry<String, Object> e : p.detail().entrySet()) {
                 if (b.length() > 0) b.append(' ');
-                b.append(e.getKey()).append('=').append(e.getValue());
+                Object v = e.getValue();
+                b.append(e.getKey()).append('=');
+                if ("path".equals(e.getKey()) && v instanceof List) {
+                    List<String> parts = new ArrayList<>();
+                    for (Object o : (List<?>) v) parts.add(String.valueOf(o));
+                    b.append(String.join(">", parts));
+                } else {
+                    b.append(v);
+                }
             }
             detail = b.length() == 0 ? null : b.toString();
         }
@@ -522,14 +517,6 @@ public final class DeckService implements Deck {
         StringBuilder b = new StringBuilder();
         for (RunItem i : r.items()) b.append(i.kind()).append('\u0000').append(i.value()).append('\u0001');
         return b.append(r.source()).append('\u0002').append(targetId).toString();
-    }
-
-    private String newToken() {
-        byte[] bytes = new byte[16];
-        random.nextBytes(bytes);
-        StringBuilder b = new StringBuilder();
-        for (byte x : bytes) b.append(Character.forDigit((x >> 4) & 15, 16)).append(Character.forDigit(x & 15, 16));
-        return b.toString();
     }
 
     private void purgeTokens(long now) {

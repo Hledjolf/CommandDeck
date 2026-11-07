@@ -27,6 +27,12 @@ public interface Game {
     /** The name of the player with this id if they are online now, else null. For a run's target. */
     String onlineName(String playerId);
 
+    /**
+     * A fresh confirmation token: a secret the presser can't guess, as text (on Hytale, 32 hex digits from
+     * {@code SecureRandom}). Making a secret isn't core logic, so the adapter supplies it.
+     */
+    String newToken();
+
     /** Runs lines as this player, with the player's own permissions. Used on the tick thread. */
     CommandSink sinkFor(Presser presser);
 
@@ -44,6 +50,15 @@ public interface Game {
         return null;
     }
 
+    /**
+     * Null when the game's own settings allow this line's command right now. Otherwise a {@code game_setting}
+     * problem whose detail has the {@code setting} it needs (on Necesse, {@code cheats} for a cheat command in a
+     * world without cheats). Asked only for a sendable line.
+     */
+    default Problem gameSetting(Presser presser, String line) {
+        return null;
+    }
+
     /** Is this presser the server console, which has its own run limit ({@code max_running_console})? */
     default boolean isConsole(Presser presser) {
         return false;
@@ -54,6 +69,11 @@ public interface Game {
      * Null when the game can't tell (an unknown command, a raw one, or a game without such a check).
      */
     default Boolean permitted(Presser presser, String line) {
+        return null;
+    }
+
+    /** The game's condition library, for {@code while} and {@code until}; null where there's none (loops are refused). */
+    default commanddeck.macro.ConditionPort conditions() {
         return null;
     }
 }

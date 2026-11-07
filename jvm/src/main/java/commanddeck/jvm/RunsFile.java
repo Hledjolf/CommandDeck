@@ -1,6 +1,5 @@
-package commanddeck.hytale;
+package commanddeck.jvm;
 
-import com.hypixel.hytale.logger.HytaleLogger;
 import commanddeck.run.RunLog;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -12,14 +11,14 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 /** {@code runs.log} in the data folder: one line per event, with the time in UTC. Appended to, never rewritten. */
-final class RunsFile implements RunLog.Appender {
+public final class RunsFile implements RunLog.Appender {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss'Z'");
 
     private final Path file;
-    private final HytaleLogger log;
+    private final HostLog log;
     private boolean warned;
 
-    RunsFile(Path file, HytaleLogger log) {
+    public RunsFile(Path file, HostLog log) {
         this.file = file;
         this.log = log;
     }
@@ -31,7 +30,7 @@ final class RunsFile implements RunLog.Appender {
             Files.createDirectories(file.getParent());
             Files.writeString(file, entry, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            if (!warned) log.atWarning().log("[CommandDeck] Can't write %s: %s", file, e.getMessage());
+            if (!warned) log.warn(String.format("[CommandDeck] Can't write %s: %s", file, e.getMessage()));
             warned = true;
         }
     }

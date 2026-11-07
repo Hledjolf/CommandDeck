@@ -4,7 +4,10 @@ val hytaleServerJar = (findProperty("hytaleServerJar") as String?)
     ?: "${System.getenv("APPDATA")}/Hytale/install/release/package/game/latest/Server/HytaleServer.jar"
 
 dependencies {
+    "implementation"(project(":conditions"))
     "implementation"(project(":core"))
+    "implementation"(project(":window"))
+    "implementation"(project(":jvm"))
     "compileOnly"(files(hytaleServerJar))
     "testImplementation"(files(hytaleServerJar))
 }
@@ -17,7 +20,10 @@ tasks.named<ProcessResources>("processResources") {
 tasks.named<Jar>("jar") {
     archiveBaseName.set("CommandDeck")
     destinationDirectory.set(rootProject.layout.buildDirectory.dir("mods"))
+    from(project(":conditions").extensions.getByType<SourceSetContainer>()["main"].output)
     from(project(":core").extensions.getByType<SourceSetContainer>()["main"].output)
+    from(project(":window").extensions.getByType<SourceSetContainer>()["main"].output)
+    from(project(":jvm").extensions.getByType<SourceSetContainer>()["main"].output)
     if (rootProject.file("LICENSE").exists()) from(rootProject.file("LICENSE"))
 }
 

@@ -23,6 +23,39 @@ public final class Json {
         }
     }
 
+    /** JSON's number grammar: {@code -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?}, checked by hand. */
+    static boolean isNumber(String t) {
+        int i = 0;
+        int n = t.length();
+        if (i < n && t.charAt(i) == '-') i++;
+        if (i >= n) return false;
+        if (t.charAt(i) == '0') {
+            i++;
+        } else if (t.charAt(i) >= '1' && t.charAt(i) <= '9') {
+            i = digits(t, i);
+        } else {
+            return false;
+        }
+        if (i < n && t.charAt(i) == '.') {
+            int d = ++i;
+            i = digits(t, i);
+            if (i == d) return false;
+        }
+        if (i < n && (t.charAt(i) == 'e' || t.charAt(i) == 'E')) {
+            i++;
+            if (i < n && (t.charAt(i) == '+' || t.charAt(i) == '-')) i++;
+            int d = i;
+            i = digits(t, i);
+            if (i == d) return false;
+        }
+        return i == n;
+    }
+
+    private static int digits(String t, int i) {
+        while (i < t.length() && t.charAt(i) >= '0' && t.charAt(i) <= '9') i++;
+        return i;
+    }
+
     // ---- reading ----------------------------------------------------------------------------------
 
     public static Object parse(String text) {
@@ -202,7 +235,7 @@ public final class Json {
                 }
             }
             String t = s.substring(start, i);
-            if (!t.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")) {
+            if (!isNumber(t)) {
                 i = start;
                 throw error("bad number '" + t + "'");
             }
@@ -244,7 +277,11 @@ public final class Json {
      * so a rewritten file looks like the original.
      */
     public static String detectIndent(String text) {
-        for (String line : text.split("\n", -1)) {
+        for (int from = 0; from <= text.length(); ) {
+            int end = text.indexOf('\n', from);
+            if (end < 0) end = text.length();
+            String line = text.substring(from, end);
+            from = end + 1;
             int n = 0;
             while (n < line.length() && (line.charAt(n) == ' ' || line.charAt(n) == '\t')) n++;
             if (n > 0 && n < line.length()) {

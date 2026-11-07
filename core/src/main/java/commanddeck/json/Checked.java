@@ -67,7 +67,7 @@ public final class Checked {
         return m.containsKey(key) ? bool(m.get(key), at + "/" + key) : otherwise;
     }
 
-    /** The largest integer every core reads exactly, 2^53 (specs README, "Integers in documents"). */
+    /** The largest integer every core reads exactly, 2^53: a core whose numbers are doubles can't hold more. */
     public static final long MAX_SAFE = 9007199254740992L;
 
     /** Refuses the first integer outside ±2^53 in a whole document, in reading order. */
@@ -83,6 +83,16 @@ public final class Checked {
 
     private static String pointerToken(String key) {
         return key.replace("~", "~0").replace("/", "~1");
+    }
+
+    /** A format version as the formats write it: {@code 1.} and one or more digits ({@code 1.0}, {@code 1.12}). */
+    public static boolean isFormatVersion(String v) {
+        if (v.length() < 3 || v.charAt(0) != '1' || v.charAt(1) != '.') return false;
+        for (int i = 2; i < v.length(); i++) {
+            char c = v.charAt(i);
+            if (c < '0' || c > '9') return false;
+        }
+        return true;
     }
 
     public static long integer(Object v, String at) {

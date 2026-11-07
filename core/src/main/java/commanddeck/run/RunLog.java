@@ -29,8 +29,13 @@ public final class RunLog {
 
     /** {@code target} is null when the run is for the presser. */
     public void started(String runId, String presser, String target, String macroId, String source) {
+        started(runId, presser, target, macroId, source, java.util.List.of());
+    }
+
+    /** {@code called} lists every macro the run's {@code call} nodes reached, by scoped reference, once each. */
+    public void started(String runId, String presser, String target, String macroId, String source, java.util.List<String> called) {
         out.append("run " + runId + " started by " + presser + (target == null ? "" : " for " + target) + " macro=" + (macroId == null ? "-" : macroId)
-            + " source=" + (source == null ? "-" : quote(source)));
+            + " source=" + (source == null ? "-" : quote(source)) + (called.isEmpty() ? "" : " called=" + String.join(",", called)));
     }
 
     public void step(StepEvent e) {

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0 (2026-11-06)
+
+Tested on Hytale server 0.7.6.
+
+- **Loops on a condition (macro format 1.2):** a `while` step repeats while its condition holds, an `until` step until it does, each with its own `max_iterations` (at most `MaxIterations`). The condition is checked before each pass. A condition the game can't answer stops the run with "couldn't be answered", naming the check, instead of guessing.
+- **Conditions:** your health or another stat, how many of an item you carry, the item in your hand or what you wear, the time of day and night, the weather, the zone, a distance or an area, whether a player is online, standing in or near water or another fluid, and creatures nearby (hostile, passive or players). Combine them with all of, any of and not. Item, weather and fluid groups come from the game's own tags.
+- **Calling another macro (macro format 1.2):** a `call` step runs another macro or preset by its reference, as if its steps were written there. A call that leads back to itself is refused (`cycle`), and a run may hold at most `MaxNodes` steps once calls are filled in.
+- **The editor** has + Loop (repeat, while or until) with its checks as forms, and + Call. A check's problems show under it before you save. Here fills a position with where you stand.
+- **`heal` preset:** fills the target's health and stamina, after checking they're alive. It needs the new `commanddeck.heal` permission.
+- **`/deck alive <player>`:** fails unless that player is online and alive, so a macro stops there.
+- **A `/deck run` that can't start now fails as a command**, so a macro or another mod sending it sees the refusal.
+- **New settings:** `MaxNodes` (default 10000) and `ConditionBudgetMs` (default 2), the time one condition check may take before it counts as unanswered.
+- **Server condition registries:** files in `mods/Hledjolf_CommandDeck/registries/` add item, weather and fluid groups of your own.
+- **For mod authors:** the shared condition library (`hledjolf.conditions.api` 1.0) ships inside the jar. Your mod can ask it the same conditions, or register condition types of its own, which the editor then offers. Integration API 1.2 adds the refusal codes `cycle` and `game_setting`.
+
 ## 1.1.0 (2026-10-30)
 
 - **Run for another player (integration API 1.1):** another mod can name a target for a run, and `{target}` is filled with that player's name. The commands still run as the player who pressed the button, with their own permissions. Naming someone else needs the new `commanddeck.run_others` permission; a target who isn't online, or who leaves during the run, stops it. The confirmation covers the target, and `runs.log` records it.

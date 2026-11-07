@@ -83,7 +83,7 @@ public final class SidecarReader {
             throw new Checked.Invalid("/format", "format must be \"commanddeck.commands\"");
         }
         String version = string(need(m, "format_version", ""), "/format_version");
-        if (!version.matches("1\\.[0-9]+")) throw new Checked.Invalid("/format_version", "format_version must look like 1.0");
+        if (!Checked.isFormatVersion(version)) throw new Checked.Invalid("/format_version", "format_version must look like 1.0");
         Map<String, Object> mod = object(need(m, "mod", ""), "/mod");
         only(mod, MOD_KEYS, "/mod");
         String modId = string(need(mod, "id", "/mod"), "/mod/id");

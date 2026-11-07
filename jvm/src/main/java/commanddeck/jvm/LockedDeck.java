@@ -1,4 +1,4 @@
-package commanddeck.hytale;
+package commanddeck.jvm;
 
 import commanddeck.api.CheckResult;
 import commanddeck.api.Deck;
@@ -14,10 +14,10 @@ import java.util.List;
 
 /**
  * The single-threaded core made safe from any thread: every call into the deck, the tick included, holds this
- * one lock. Hytale calls in from its scheduler (the tick), from world threads (commands and the window) and
- * from other mods' threads. The lock is reentrant, so a listener called during the tick may ask for
- * {@code status}. Calls are short; the longest wait is {@code {look}}, which gives up after
- * {@link HytaleGame#LOOK_WAIT_MILLIS} if the player's world thread is busy.
+ * one lock. The game calls in from its tick, from the threads that run commands and the window, and from other
+ * mods' threads. The lock is reentrant, so a listener called during the tick may ask for {@code status}. Calls
+ * are short; on Hytale the longest wait is {@code {look}}, which gives up quickly if the player's world thread
+ * is busy.
  */
 public final class LockedDeck implements Deck {
     private final DeckService deck;

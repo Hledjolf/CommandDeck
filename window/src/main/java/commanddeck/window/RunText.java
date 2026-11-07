@@ -1,18 +1,14 @@
-package commanddeck.hytale;
+package commanddeck.window;
 
 import commanddeck.api.RunStatus;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * A run in words, for the window's Runs tab and {@code /deck list}. The run's position comes as a path into the
  * macro ({@code body.steps[2].body}); players see step numbers instead ("inside step 3").
  */
 public final class RunText {
-    private static final Pattern STEP = Pattern.compile("\\.steps\\[(\\d+)]");
-
     private RunText() {}
 
     /** "morning: waiting, 1 step done, next: inside step 3, from window (run mvms1a30-1)". */
@@ -35,14 +31,14 @@ public final class RunText {
         String rest = path.substring(4);
         StringBuilder num = new StringBuilder();
         boolean inside = false;
-        Matcher m = STEP.matcher(rest);
         int i = 0;
         while (i < rest.length()) {
-            if (m.find(i) && m.start() == i) {
+            int close = stepAt(rest, i);
+            if (close >= 0) {
                 if (num.length() > 0) num.append('.');
-                num.append(Integer.parseInt(m.group(1)) + 1);
+                num.append(Integer.parseInt(rest.substring(i + STEPS.length(), close)) + 1);
                 inside = false;
-                i = m.end();
+                i = close + 1;
             } else if (rest.startsWith(".body", i)) {
                 if (num.length() == 0) num.append('1'); // a macro that is one repeat: that repeat is step 1
                 inside = true;
@@ -53,6 +49,17 @@ public final class RunText {
         }
         if (num.length() == 0) return "the start";
         return (inside ? "inside step " : "step ") + num;
+    }
+
+    private static final String STEPS = ".steps[";
+
+    /** Where the closing bracket is when {@code .steps[<digits>]} starts at {@code i}, else -1. */
+    private static int stepAt(String s, int i) {
+        if (!s.startsWith(STEPS, i)) return -1;
+        int j = i + STEPS.length();
+        int k = j;
+        while (k < s.length() && s.charAt(k) >= '0' && s.charAt(k) <= '9') k++;
+        return k > j && k < s.length() && s.charAt(k) == ']' ? k : -1;
     }
 
     /** "1 run", "2 runs". */

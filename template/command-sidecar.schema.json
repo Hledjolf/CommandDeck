@@ -1,6 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:hledjolf:commanddeck:command-sidecar:1.1",
+  "x-contract": {
+    "contract": "commanddeck.sidecar",
+    "version": "1.1",
+    "status": "stable",
+    "provider": "CommandDeck",
+    "compatibility": "minor-adds"
+  },
   "title": "CommandDeck command sidecar",
   "type": "object",
   "required": [
@@ -77,7 +84,7 @@
             "position",
             "duration"
           ],
-          "description": "greedy_string takes the rest of the line. position is three numbers or placeholders."
+          "description": "greedy_string takes the rest of the line. position is the game's coordinates (three numbers on Hytale, two on Necesse) or placeholders."
         },
         "style": {
           "enum": [
@@ -254,7 +261,7 @@
         "permission": {
           "type": "string",
           "minLength": 1,
-          "description": "A permission node a player must hold to see or run this preset. Adds a check, grants nothing. Since 1.1.",
+          "description": "A permission a player must hold to see or run this preset, written the game's way: a node on Hytale, a level name such as ADMIN on Necesse. Adds a check, grants nothing. Since 1.1.",
           "x-since": "1.1"
         },
         "macro": {

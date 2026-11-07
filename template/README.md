@@ -1,3 +1,11 @@
+---
+contract: commanddeck.sidecar
+version: 1.1
+status: stable
+provider: CommandDeck
+compatibility: minor-adds
+---
+
 # CommandDeck command sidecar (format 1.1)
 
 CommandDeck turns every command in the game into a button: a form with a field per argument, help for each one, and a preview of the exact command line it will run. A **command sidecar** is a small JSON file your mod ships to make its commands into better buttons.
@@ -22,7 +30,7 @@ CommandDeck turns every command in the game into a button: a form with a field p
 ## Where CommandDeck looks
 
 - **Your mod:** `commanddeck/commands.json` inside the mod.
-- **A server owner's override:** any `.json` file in `sidecars/` in CommandDeck's data folder (on Hytale `mods/Hledjolf_CommandDeck/sidecars/`). The file's own `mod.id` says which mod it's for, so the name doesn't matter. By convention it's the mod id with `:` written as `_`: `Hledjolf_CalendarSeasons.json`. If two files are for the same mod, the one whose name sorts last wins. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
+- **A server owner's override:** any `.json` file in `sidecars/` in CommandDeck's data folder (on Hytale `mods/Hledjolf_CommandDeck/sidecars/`; on a Necesse dedicated server `<datadir>\cfg\commanddeck\sidecars\`). The file's own `mod.id` says which mod it's for, so the name doesn't matter. By convention it's the mod id, with `:` written as `_` on Hytale: `Hledjolf_CalendarSeasons.json`, `examplemod.json`. If two files are for the same mod, the one whose name sorts last wins. An override wins over the mod's own sidecar, so owners can fix or translate descriptions without touching your mod.
 - Sidecars are read when the game starts and on `/deck reload`.
 
 ## Three description levels
@@ -42,6 +50,7 @@ The raw level is common outside Java games, and it works: the help text is shown
 The game decides which commands exist. Your sidecar refines them.
 
 1. **Existence:** a command must be registered in the running game. A sidecar entry for a command that isn't registered (its mod isn't installed, or the command was renamed) is ignored, with a warning in the log (`sidecar_unknown_command`). On games that can't list commands, the sidecar is the list.
+   - **So describe only commands the game registers.** A command that parses its own extra words shows up as one bare command, and entries for its sub-forms (`date set`, `date season`) are ignored. Register each form as a real subcommand if you want it described.
 2. **Detail:** your label, description, category, examples, danger flag and arguments are added.
 3. **Argument types:** if the game reports a type, your sidecar may narrow it (an `int` gets `min`/`max`, a `string` becomes an `enum`) but not change it to something incompatible. A narrowing is the same type, or a `string` made into `enum`, `player`, `item`, `block`, `entity` or `duration`. Anything else logs a warning (`sidecar_type_conflict`), and the game's type wins; your bounds, options, default and text still apply.
 4. **Help text:** the game's help text is kept. Your `description` is shown as well, not instead.
@@ -64,7 +73,7 @@ Each entry in `commands[]`:
 - `name` (required): without the slash. A subcommand is written with spaces: `calendar set day`.
 - `aliases`, `label` (up to 60 characters), `description` (up to 1000), `category` (up to 40).
 - `danger`: `none` (default), `confirm` (ask before running), or `save_risk` (ask, and warn that it can damage a save).
-- `permission`: the permission node the game checks, if you know it. Shown only.
+- `permission`: the permission the game checks, if you know it, written the game's way (a node on Hytale; a level name such as `ADMIN` on Necesse). Shown only.
 - `args[]`: the arguments (below).
 - `variants[]`: other forms of the same command (below).
 - `examples[]`: `line`, plus an optional `explanation`. Write `line` exactly as a player would type it in chat.
@@ -82,7 +91,7 @@ Each entry in `args[]`:
 
 ### Argument types
 
-`string` (one word), `greedy_string` (the rest of the line), `int`, `float`, `bool`, `enum`, `player`, `item`, `block`, `entity`, `position` (three numbers or placeholders), `duration`.
+`string` (one word), `greedy_string` (the rest of the line), `int`, `float`, `bool`, `enum`, `player`, `item`, `block`, `entity`, `position` (the game's coordinates: three numbers on Hytale, two on Necesse, or placeholders), `duration`.
 
 Which types get a picker (a player list, an item search) depends on the game. Anything without a picker is a text field.
 
@@ -112,7 +121,7 @@ Filled in when the command runs, from the player who pressed the button:
 | --- | --- |
 | `{self}` | The player's name |
 | `{target}` | The player chosen in the window, or the player who pressed the button |
-| `{x} {y} {z}` | The player's position, in the game's own units (whole blocks on Hytale) |
+| `{x} {y} {z}` | The player's position, in the game's own units: whole blocks on Hytale, tiles on Necesse. Necesse has no `{z}` |
 | `{look}` | What the player is looking at, where the game supports it |
 
 An unknown placeholder, or one the game can't fill, stops the command with a message. It's never sent as text.
@@ -121,11 +130,11 @@ An unknown placeholder, or one the game can't fill, stops the command with a mes
 
 A preset is a ready-made macro your mod ships: a button that runs several commands. Each entry in `presets[]` has `id` (required: lowercase letters, digits, `_` and `-`), `name` (required), `description`, `category`, `permission` (1.1, optional), and `macro` (required).
 
-**`permission` (since 1.1):** a permission node a player must hold to see or run the preset, for example `"permission": "cheatmenu.use"`. Players without it don't see the preset, and running it is refused with a message. It only adds a check: the game still checks every command, and the field never grants anything. Operators and the singleplayer world owner pass. When a player saves the preset as their own, the copy keeps the check, and they can't remove it.
+**`permission` (since 1.1):** a permission a player must hold to see or run the preset, written the game's way: a node on Hytale (`"permission": "cheatmenu.use"`), a level name on Necesse (`"permission": "ADMIN"`, meaning that level or higher). Players without it don't see the preset, and running it is refused with a message. It only adds a check: the game still checks every command, and the field never grants anything. Operators and the singleplayer world owner pass. When a player saves the preset as their own, the copy keeps the check, and they can't remove it.
 
 **Categories:** CommandDeck's Macros tab groups presets under a heading per `category`, so give related presets the same one (for example `My Mod: Items`).
 
-**Naming a preset from another mod (since 1.1):** a preset's full reference is `preset:<your mod id>/<preset id>`, for example `preset:MyGroup:MyMod/jump-to-spring`. Other mods (a gift catalog, a test plan) should use that form, so two mods' presets with the same id never get mixed up. People typing `/deck run` can still use the plain id.
+**Naming a preset from another mod (since 1.1):** a preset's full reference is `preset:<your mod id>/<preset id>`, for example `preset:MyGroup:MyMod/jump-to-spring` on Hytale, or `preset:examplemod/jump-to-spring` on Necesse. Other mods (a gift catalog, a test plan) should use that form, so two mods' presets with the same id never get mixed up. People typing `/deck run` can still use the plain id.
 
 ### Preset macros
 
@@ -152,7 +161,7 @@ How presets run:
 
 `format_version` is `major.minor`. A minor version only adds optional things, so a 1.0 sidecar stays valid in every 1.x.
 
-**Using a newer field needs a newer CommandDeck.** CommandDeck 1.0 refuses a sidecar with a field it doesn't know, so a sidecar that uses `permission` won't load on 1.0 at all. If you use it, set `format_version` to `"1.1"` and require CommandDeck 1.1 or later in your mod's manifest (on Hytale, `"Hledjolf:CommandDeck": ">=1.1.0"`). From CommandDeck 1.1 on, a problem in one command or preset skips only that entry, with a warning in the log, and the rest of the sidecar loads. If a preset uses a step type newer than the installed CommandDeck understands, that preset is refused with a clear message. CommandDeck never guesses.
+**Using a newer field needs a newer CommandDeck.** CommandDeck 1.0 refuses a sidecar with a field it doesn't know, so a sidecar that uses `permission` won't load on 1.0 at all. If you use it, set `format_version` to `"1.1"` and require CommandDeck 1.1 or later in your mod's manifest (on Hytale, `"Hledjolf:CommandDeck": ">=1.1.0"`; on Necesse, `commanddeck` in `mod.info`'s dependencies). From CommandDeck 1.1 on, a problem in one command or preset skips only that entry, with a warning in the log, and the rest of the sidecar loads. If a preset uses a step type newer than the installed CommandDeck understands, that preset is refused with a clear message. CommandDeck never guesses.
 
 ## License
 

@@ -20,6 +20,7 @@ import commanddeck.deck.Game;
 import commanddeck.macro.Placeholders;
 import commanddeck.macro.Problem;
 import commanddeck.run.CommandSink;
+import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -32,11 +33,14 @@ import java.util.function.Supplier;
  * UUID), which is always online, may do everything, and has no position.
  */
 final class HytaleGame implements Game {
+    private final SecureRandom random = new SecureRandom();
     static final String USE = "commanddeck.use";
     static final String MACROS_EDIT = "commanddeck.macros.edit";
     static final String RUN_OTHERS = "commanddeck.run_others";
     /** Stop other players' runs and reload: {@code /deck stop all}, {@code /deck reload}. Operators have it. */
     static final String OPERATOR = "commanddeck.operator";
+    /** Runs the {@code heal} preset (1.2). */
+    static final String HEAL = "commanddeck.heal";
 
     static final String CONSOLE_ID = ConsoleSender.INSTANCE.getUuid().toString();
 
@@ -46,6 +50,7 @@ final class HytaleGame implements Game {
     static final long LOOK_WAIT_MILLIS = 250;
 
     private final Settings settings;
+    private volatile commanddeck.macro.ConditionPort conditions;
     private final Supplier<CommandCatalog> catalog;
     private final Supplier<HytaleCommands> commands;
     private final HytaleEscaper escaper;
@@ -191,6 +196,37 @@ final class HytaleGame implements Game {
         }
     }
 
+    /**
+     * Whether the player is alive (has no death component), read on their world thread: from another thread it waits
+     * up to {@link #LOOK_WAIT_MILLIS}. Null when it can't tell.
+     */
+    static Boolean alive(PlayerRef p) {
+        World w = HytaleFacts.worldOf(p);
+        if (w == null) return null;
+        java.util.function.Supplier<Boolean> now = () -> {
+            Ref<EntityStore> ref = p.getReference();
+            if (ref == null || !ref.isValid()) return null;
+            return ref.getStore().getComponent(ref, com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent.getComponentType()) == null;
+        };
+        if (w.isInThread()) return now.get();
+        CompletableFuture<Boolean> found = new CompletableFuture<>();
+        w.execute(() -> {
+            try {
+                found.complete(now.get());
+            } catch (Throwable e) {
+                found.completeExceptionally(e);
+            }
+        });
+        try {
+            return found.get(LOOK_WAIT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException | TimeoutException e) {
+            return null;
+        }
+    }
+
     /** On the world thread. The lookup's test sees each block id along the ray; the first that isn't empty is hit. */
     private static String lookNow(PlayerRef p) {
         Ref<EntityStore> ref = p.getReference();
@@ -223,6 +259,15 @@ final class HytaleGame implements Game {
     }
 
     @Override
+    public String newToken() {
+        byte[] bytes = new byte[16];
+        random.nextBytes(bytes);
+        StringBuilder b = new StringBuilder();
+        for (byte x : bytes) b.append(Character.forDigit((x >> 4) & 15, 16)).append(Character.forDigit(x & 15, 16));
+        return b.toString();
+    }
+
+    @Override
     public Problem checkLine(String line) {
         return HytaleLines.checkLine(line);
     }
@@ -230,5 +275,14 @@ final class HytaleGame implements Game {
     @Override
     public Placeholders.Escaper escaper() {
         return escaper;
+    }
+
+    void useConditions(commanddeck.macro.ConditionPort conditions) {
+        this.conditions = conditions;
+    }
+
+    @Override
+    public commanddeck.macro.ConditionPort conditions() {
+        return conditions;
     }
 }

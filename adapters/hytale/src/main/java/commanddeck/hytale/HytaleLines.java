@@ -5,6 +5,10 @@ import commanddeck.command.ArgType;
 import commanddeck.macro.Problem;
 import java.util.ArrayList;
 import java.util.List;
+import commanddeck.window.LineRules.Built;
+import commanddeck.window.LineRules.Field;
+import commanddeck.window.LineRules.Unsendable;
+import commanddeck.window.LineRules;
 
 /**
  * Hytale's command-line rules, as measured on the server's text path. The tokenizer checks the whole line,
@@ -33,33 +37,29 @@ import java.util.List;
 public final class HytaleLines {
     private HytaleLines() {}
 
+    /** These rules as the window's port. */
+    public static final LineRules RULES = new LineRules() {
+        @Override
+        public Built build(String command, List<Field> fields) {
+            return HytaleLines.build(command, fields);
+        }
+
+        @Override
+        public Problem checkLine(String line) {
+            return HytaleLines.checkLine(line);
+        }
+
+        @Override
+        public String message(String reason) {
+            return HytaleLines.message(reason);
+        }
+    };
+
     /** The five characters CommandDeck escapes anywhere in a one-word value. */
     static final String ESCAPABLE = "\\,[]\"";
 
     /** The tokenizer's escape list: the five, and {@code '} (escaped only at the start of a value). */
     static final String ESCAPES = "\\,[]\"'";
-
-    /**
-     * One form field: its argument and the value typed. A flag's value is {@code true} or {@code false}.
-     * {@code tokens} above 1 is a game type that reads that many words (a position, a rotation): the value is
-     * that many words, each sent as a token of its own. {@code list} is a list argument: {@code a, b} or
-     * {@code [a, b]}, sent as typed, because its commas and brackets are the list.
-     */
-    public record Field(String name, ArgType type, ArgStyle style, boolean required, String value, int tokens, boolean list) {
-        public Field(String name, ArgType type, ArgStyle style, boolean required, String value) {
-            this(name, type, style, required, value, 1, false);
-        }
-    }
-
-    /** Why a value can't be sent: a reason code and the character positions in the value (or line). */
-    public record Unsendable(String reason, List<Long> positions, String field) {}
-
-    /** A built line, or why it can't be built. */
-    public record Built(String line, Unsendable unsendable) {
-        public boolean sendable() {
-            return unsendable == null;
-        }
-    }
 
     /**
      * The line for a command and its form: positional values in order, then named values as

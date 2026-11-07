@@ -11,6 +11,10 @@ import java.util.Map;
  * sidecar only refines them. On a game that can't list its commands, the sidecars are the list.
  *
  * <ul>
+ * <li>Names are compared the game's way ({@link NameRule}).
+ * <li>Several registrations of one name become one command: the first is the main form, and each later one
+ *     adds its own form and variants after the earlier ones, in registration order. If any of them is raw,
+ *     the command is raw, with each registration's help text.
  * <li>A sidecar entry for a command the game didn't register is ignored ({@code sidecar_unknown_command}).
  * <li>The game's help text is kept; the sidecar's description is shown in addition.
  * <li>Arguments are matched by name. On a raw command the sidecar's arguments are taken as they are. On a
@@ -29,25 +33,54 @@ public final class CommandMerge {
     /** The merged commands, in the game's order (or the sidecars' order with no discovery), and the warnings. */
     public record Result(List<CommandInfo> commands, List<Problem> warnings) {}
 
-    /** @param discovered the game's commands, or null when the game can't list them */
+    /** As {@link #merge(List, List, NameRule)}, with names compared exactly. */
     public static Result merge(List<CommandInfo> discovered, List<Sidecar> sidecars) {
+        return merge(discovered, sidecars, NameRule.EXACT);
+    }
+
+    /** @param discovered the game's commands in registration order, or null when the game can't list them */
+    public static Result merge(List<CommandInfo> discovered, List<Sidecar> sidecars, NameRule names) {
         List<Problem> warnings = new ArrayList<>();
         Map<String, CommandInfo> byName = new LinkedHashMap<>();
         if (discovered != null) {
-            for (CommandInfo c : discovered) byName.put(c.name(), c);
+            for (CommandInfo c : discovered) byName.merge(names.key(c.name()), c, CommandMerge::join);
         }
         for (Sidecar s : sidecars) {
             for (CommandInfo entry : s.commands()) {
-                CommandInfo base = byName.get(entry.name());
+                String key = names.key(entry.name());
+                CommandInfo base = byName.get(key);
                 if (base == null && discovered != null) {
                     warnings.add(Problem.of("sidecar_unknown_command", "The sidecar of " + s.modId() + " describes /" + entry.name()
                         + ", which the game hasn't registered", "name", entry.name(), "mod", s.modId()));
                     continue;
                 }
-                byName.put(entry.name(), base == null ? entry : refine(base, entry, warnings));
+                byName.put(key, base == null ? entry : refine(base, entry, warnings));
             }
         }
         return new Result(List.copyOf(byName.values()), List.copyOf(warnings));
+    }
+
+    /** Two registrations of one name as one command: {@code later}'s forms follow {@code first}'s. */
+    static CommandInfo join(CommandInfo first, CommandInfo later) {
+        List<String> aliases = new ArrayList<>(first.aliases());
+        for (String a : later.aliases()) {
+            if (!aliases.contains(a)) aliases.add(a);
+        }
+        boolean raw = first.level() == Level.RAW || later.level() == Level.RAW;
+        String help = first.help();
+        if (raw && later.help() != null && !later.help().equals(help)) help = help == null ? later.help() : help + "\n" + later.help();
+        List<Variant> variants = new ArrayList<>();
+        if (!raw) {
+            variants.addAll(first.variants());
+            String also = later.help() != null && !later.help().equals(first.help()) ? later.help() : null;
+            variants.add(new Variant(null, also, later.args()));
+            variants.addAll(later.variants());
+        }
+        return new CommandInfo(first.name(), List.copyOf(aliases), raw ? Level.RAW : first.level(), help, or(first.label(), later.label()),
+            or(first.description(), later.description()), or(first.category(), later.category()),
+            first.danger() != Danger.NONE ? first.danger() : later.danger(), or(first.permission(), later.permission()),
+            raw ? List.of() : first.args(), List.copyOf(variants), first.examples().isEmpty() ? later.examples() : first.examples(),
+            first.hidden() && later.hidden());
     }
 
     private static CommandInfo refine(CommandInfo base, CommandInfo side, List<Problem> warnings) {

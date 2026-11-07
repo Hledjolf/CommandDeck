@@ -1,0 +1,22 @@
+{
+  "format": "commanddeck.commands",
+  "format_version": "1.1",
+  "mod": { "id": "Hledjolf:CommandDeck", "name": "CommandDeck" },
+  "commands": [],
+  "presets": [
+    {
+      "id": "heal",
+      "name": "Heal",
+      "category": "Players",
+      "permission": "commanddeck.heal",
+      "macro": {
+        "type": "sequence",
+        "steps": [
+          { "type": "command", "line": "/deck alive {target}", "note": "Stops here if the player has died or left" },
+          { "type": "command", "line": "/player stats settomax Health --player {target}" },
+          { "type": "command", "line": "/player stats settomax Stamina --player {target}" }
+        ]
+      }
+    }
+  ]
+}

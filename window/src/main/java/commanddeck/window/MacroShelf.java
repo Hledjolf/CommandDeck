@@ -1,4 +1,4 @@
-package commanddeck.hytale.window;
+package commanddeck.window;
 
 import commanddeck.macro.Macro;
 import commanddeck.macro.Problem;

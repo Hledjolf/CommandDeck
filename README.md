@@ -4,7 +4,7 @@
 
 Every button shows the exact command line it runs, so the window teaches the commands instead of hiding them.
 
-Status: **1.1.0**. Tested on Hytale server **0.7.5**.
+Status: **1.2.0**. Tested on Hytale server **0.7.6**.
 
 ## What it does
 
@@ -29,7 +29,7 @@ Status: **1.1.0**. Tested on Hytale server **0.7.5**.
 
 ## Install
 
-1. Put `CommandDeck-1.1.0.jar` in your server's `mods` folder (singleplayer: `%APPDATA%\Hytale\UserData\Mods\`).
+1. Put `CommandDeck-1.2.0.jar` in your server's `mods` folder (singleplayer: `%APPDATA%\Hytale\UserData\Mods\`).
 2. Nothing else is needed.
 3. Type `/deck`.
 
@@ -44,6 +44,7 @@ Status: **1.1.0**. Tested on Hytale server **0.7.5**.
 | `/deck stop all` | Stops everyone's runs (operators) |
 | `/deck list` | Lists what you can run, and your runs |
 | `/deck reload` | Reads the sidecars, macros and settings again (operators) |
+| `/deck alive <player>` | Fails unless that player is online and alive, so a macro stops there |
 | `/deck help` | Shows this list |
 
 `/deck` works from the server console too, apart from opening the window.
@@ -54,6 +55,7 @@ Status: **1.1.0**. Tested on Hytale server **0.7.5**.
 - `commanddeck.macros.edit`: save your own macros. Operators may always.
 - `commanddeck.operator`: `/deck stop all` and `/deck reload`. The singleplayer world's owner and the console have it.
 - `commanddeck.run_others` (from 1.1.0): lets another mod run a macro *for* another player, filling `{target}` with their name (Generous Operator's gifts). The commands still run with your own permissions.
+- `commanddeck.heal` (from 1.2.0): the `heal` preset, which fills the target's health and stamina after checking they're alive.
 
 CommandDeck never grants a command: the game still checks every command as the player who runs it.
 
@@ -73,15 +75,17 @@ The settings are in `mods/Hledjolf_CommandDeck/config.json`. With [Mod Settings 
 | `MaxRunningForConsole` | 4 | How many runs the server console may have going at once. Other mods use the console to act for the server. |
 | `PlainSender` | false | Send through the server's own handler. Refusals and replies can't be seen then, so every step is marked uncertain. Only for a mod whose commands misbehave. |
 | `CommandTimeoutSeconds` | 10 | A command that hasn't finished after this long counts as sent (uncertain), and the run moves on. |
+| `MaxNodes` | 10000 | How many steps a run may hold once the macros it calls are filled in (100 to 1000000). |
+| `ConditionBudgetMs` | 2 | How long one condition check may take (1 to 50 ms). A slower one counts as unanswered, and the run stops. |
 
-Saved data lives next to it: `macros/server/` (the server's macros), `macros/players/<uuid>/` (each player's), `prefs/` (favorites and history), `sidecars/` (the owner's sidecar overrides) and `runs.log`.
+Saved data lives next to it: `macros/server/` (the server's macros), `macros/players/<uuid>/` (each player's), `prefs/` (favorites and history), `sidecars/` (the owner's sidecar overrides), `registries/` (your own item, weather and fluid groups for conditions) and `runs.log`.
 
 ## Compatibility
 
-- Hytale server **0.7.5**.
+- Hytale server **0.7.6**.
 - Dedicated servers and singleplayer.
 - One jar, no dependencies.
-- Macro steps in 1.1.0: command, sequence, repeat and wait. Loops on a condition and calling other macros are planned for 1.2.
+- Macro steps: command, sequence, repeat, wait, while, until and call (macro format 1.2).
 
 ## For mod authors
 
@@ -91,7 +95,9 @@ From 1.1.0, a preset can carry a `permission` node: players without it don't see
 
 The format, its JSON schema and a complete example are in [`template/`](template/README.md). Server owners can override a mod's sidecar with their own file in `mods/Hledjolf_CommandDeck/sidecars/`.
 
-Other mods can also run command lines and macros through CommandDeck's integration API (`commanddeck.api.Deck`), with the same rules as a button press. API 1.1 (CommandDeck 1.1.0) adds a run's target (`{target}`) and `macros(presser, category)`, which lists what a player can run so your mod can build its own buttons. Check `apiVersion()` before using them.
+Other mods can also run command lines and macros through CommandDeck's integration API (`commanddeck.api.Deck`), with the same rules as a button press. API 1.1 (CommandDeck 1.1.0) adds a run's target (`{target}`) and `macros(presser, category)`, which lists what a player can run so your mod can build its own buttons. Check `apiVersion()` before using them. API 1.2 (CommandDeck 1.2.0) adds the refusal codes `cycle` (a `call` that leads back to itself) and `game_setting`.
+
+CommandDeck 1.2.0 also carries the shared **condition library** (`hledjolf.conditions.api` 1.0). Your mod can ask it the same conditions macros use (`Conditions.lookup()`), or register condition types of its own; the macro editor then offers them, under your mod's name. Use it only when CommandDeck is installed: `lookup()` is null until CommandDeck has started.
 
 ## License
 

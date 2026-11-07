@@ -1,0 +1,18 @@
+// The end of a While or Until loop's block in the macro editor: "+ Check" adds a check after the loop's others.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Left;
+  Anchor: (Height: 36, Bottom: 4);
+
+  Label #Depth {
+    Text: "";
+    Anchor: (Width: 60, Right: 4);
+    Style: (FontSize: 16, RenderBold: true, TextColor: #7a9cc6, VerticalAlignment: Center, HorizontalAlignment: End);
+  }
+
+  $C.@SmallSecondaryTextButton #AddCheck {
+    @Text = "+ Check";
+    @Anchor = (Width: 100, Top: 2);
+  }
+}

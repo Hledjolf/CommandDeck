@@ -13,19 +13,25 @@ import com.hypixel.hytale.server.core.Constants;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import commanddeck.api.CommandDeckApi;
+import commanddeck.jvm.FileMacros;
+import commanddeck.jvm.FilePrefs;
+import commanddeck.jvm.HostLog;
+import commanddeck.jvm.LockedDeck;
+import commanddeck.jvm.RunsFile;
 import commanddeck.api.Deck;
 import commanddeck.api.Presser;
 import commanddeck.api.RunListener;
 import commanddeck.command.ArgType;
 import commanddeck.command.CommandCatalog;
+import commanddeck.deck.MacroLookup;
 import commanddeck.command.CommandInfo;
 import commanddeck.command.Level;
 import commanddeck.command.Sidecars;
 import commanddeck.deck.DeckService;
 import commanddeck.hytale.window.DeckWindow;
-import commanddeck.hytale.window.Host;
-import commanddeck.hytale.window.MacroShelf;
-import commanddeck.hytale.window.Prefs;
+import commanddeck.window.LocalSession;
+import commanddeck.window.MacroShelf;
+import commanddeck.window.Prefs;
 import commanddeck.macro.Limits;
 import commanddeck.macro.Problem;
 import commanddeck.run.RunLog;
@@ -50,6 +56,9 @@ public final class CommandDeckPlugin extends JavaPlugin {
     private FileMacros macros;
     private HytaleAssets assets;
     private HytaleGame game;
+    /** The shared condition library this process hosts, and its port for macros' loops. */
+    private hledjolf.conditions.Library conditionLibrary;
+    private HytaleConditions conditions;
     private LockedDeck deck;
     private volatile CommandCatalog catalog;
     private volatile HytaleCommands commands;
@@ -57,6 +66,9 @@ public final class CommandDeckPlugin extends JavaPlugin {
     /** Each player's window, kept while they are online so closing it loses nothing (an unsaved macro included). */
     private final Map<String, DeckWindow> windows = new ConcurrentHashMap<>();
     private long tick;
+
+    /** The plugin's log, for the shared files and sidecars. */
+    private HostLog hostLog;
 
     public CommandDeckPlugin(JavaPluginInit init) {
         super(init);
@@ -68,8 +80,19 @@ public final class CommandDeckPlugin extends JavaPlugin {
         settings = new Settings();
         String problem = settings.load(data.resolve("config.json"));
         if (problem != null) getLogger().atWarning().log("[CommandDeck] %s", problem);
-        macros = new FileMacros(data, getLogger(), () -> settings.limits());
-        prefs = new FilePrefs(data, getLogger());
+        hostLog = new HostLog() {
+            @Override
+            public void info(String message) {
+                getLogger().atInfo().log("%s", message);
+            }
+
+            @Override
+            public void warn(String message) {
+                getLogger().atWarning().log("%s", message);
+            }
+        };
+        macros = new FileMacros(data, hostLog, () -> settings.limits());
+        prefs = new FilePrefs(data, hostLog);
         assets = new HytaleAssets(getLogger());
         game = new HytaleGame(settings, () -> catalog, () -> commands, new HytaleEscaper.Shapes() {
             @Override
@@ -86,7 +109,17 @@ public final class CommandDeckPlugin extends JavaPlugin {
                 return s != null && s.list();
             }
         }, getLogger());
-        RunLog runLog = new RunLog(new RunsFile(data.resolve("runs.log"), getLogger()));
+        RunLog runLog = new RunLog(new RunsFile(data.resolve("runs.log"), hostLog));
+        macros.usePresets(() -> catalog);
+        // The condition library is up from CommandDeck's setup on, so other mods can register in theirs.
+        conditionLibrary = new hledjolf.conditions.Library(new HytaleFacts(), m -> getLogger().atWarning().log("[Conditions] %s", m),
+            System::nanoTime, () -> settings.conditionBudgetMs());
+        if (!hledjolf.conditions.api.Installed.install(conditionLibrary)) {
+            getLogger().atWarning().log("[CommandDeck] Another condition library is already installed; loops use their own");
+        }
+        conditions = new HytaleConditions(conditionLibrary);
+        game.useConditions(conditions);
+        macros.useConditions(() -> conditions);
         deck = new LockedDeck(new DeckService(game, macros, () -> catalog, runLog, System::currentTimeMillis));
         applySettings();
         CommandDeckApi.publish(deck);
@@ -96,6 +129,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
         PermissionsModule.registerPermission(HytaleGame.MACROS_EDIT);
         PermissionsModule.registerPermission(HytaleGame.RUN_OTHERS);
         PermissionsModule.registerPermission(HytaleGame.OPERATOR);
+        PermissionsModule.registerPermission(HytaleGame.HEAL);
         getCommandRegistry().registerCommand(new DeckCommand(this));
         getEventRegistry().register(BootEvent.class, e -> boot());
         getEventRegistry().register(PlayerDisconnectEvent.class, e -> windows.remove(e.getPlayerRef().getUuid().toString()));
@@ -103,6 +137,11 @@ public final class CommandDeckPlugin extends JavaPlugin {
 
     private synchronized void boot() {
         HytaleSink.watchMessages();
+        try {
+            getLogger().atInfo().log("[CommandDeck] conditions: %s", conditions.seed(conditionLibrary));
+        } catch (RuntimeException e) {
+            getLogger().atWarning().withCause(e).log("[CommandDeck] Couldn't read the game's weathers, fluids and items for conditions");
+        }
         String loaded = load();
         long stepNanos = 1_000_000_000L / TickingThread.TPS;
         if (ticker == null) ticker = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::tick, stepNanos, stepNanos, TimeUnit.NANOSECONDS);
@@ -157,7 +196,8 @@ public final class CommandDeckPlugin extends JavaPlugin {
     }
 
     private String load() {
-        Sidecars sidecars = HytaleSidecars.load(getDataDirectory(), getLogger());
+        int registryEntries = conditions.port().readRegistryFiles(getDataDirectory().resolve("registries"), hostLog::warn);
+        Sidecars sidecars = HytaleSidecars.load(getDataDirectory(), hostLog);
         HytaleCommands found = new HytaleCommands();
         CommandCatalog cat = CommandCatalog.build(found, sidecars);
         commands = found;
@@ -168,8 +208,12 @@ public final class CommandDeckPlugin extends JavaPlugin {
             if (c.level() == Level.DESCRIBED) described++;
         }
         int n = macros.reload();
+        // Presets' calls are checked once the server macros they may name are read.
+        List<Problem> calls = MacroLookup.presetWarnings(cat, macros);
+        for (Problem w : calls) getLogger().atWarning().log("[CommandDeck] %s: %s", w.code(), w.message());
         return cat.commands().size() + " commands (" + described + " described by sidecars), " + sidecars.effective().size()
-            + " sidecars, " + cat.presets().size() + " presets, " + n + " saved macros, " + cat.warnings().size() + " warnings.";
+            + " sidecars, " + cat.presets().size() + " presets, " + n + " saved macros, " + registryEntries + " registry entries from files, "
+            + (cat.warnings().size() + calls.size()) + " warnings.";
     }
 
     /** The current command list (rebuilt on reload); null before boot. */
@@ -184,7 +228,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
 
     /** A fresh window for a presser. Public for the headless scenarios, which drive it without a client. */
     public DeckWindow window(Presser presser) {
-        return new DeckWindow(new WindowHost(presser));
+        return new DeckWindow(new LocalSession(new WindowHost(presser)), HytaleLines.RULES);
     }
 
     /** The presser's own window: the same one every time until they leave, so a closed window keeps its state. */
@@ -193,7 +237,7 @@ public final class CommandDeckPlugin extends JavaPlugin {
     }
 
     /** What one presser's window sees of the plugin. */
-    private final class WindowHost implements Host {
+    private final class WindowHost implements LocalSession.Game {
         private final Presser presser;
         private final RunListener reporter;
 
@@ -210,6 +254,16 @@ public final class CommandDeckPlugin extends JavaPlugin {
         @Override
         public LockedDeck deck() {
             return deck;
+        }
+
+        @Override
+        public int stopAll(Presser by) {
+            return deck.stopAll(by);
+        }
+
+        @Override
+        public boolean holds(Presser p, String permission) {
+            return deck.holds(p, permission);
         }
 
         @Override
@@ -233,6 +287,20 @@ public final class CommandDeckPlugin extends JavaPlugin {
         }
 
         @Override
+        public commanddeck.macro.ConditionPort conditions() {
+            return conditions;
+        }
+
+        /** For the editor's Here button: where the presser stands now. */
+        @Override
+        public double[] position() {
+            PlayerRef p = HytaleGame.player(presser.id());
+            com.hypixel.hytale.math.vector.Transform t = p == null ? null : p.getTransform();
+            if (t == null || t.getPosition() == null) return null;
+            return new double[] {t.getPosition().x, t.getPosition().y, t.getPosition().z};
+        }
+
+        @Override
         public boolean canEditOwn() {
             return HytaleGame.has(presser.id(), HytaleGame.MACROS_EDIT) || Constants.SINGLEPLAYER && settings.everyoneInSingleplayer()
                 || game.isOperator(presser);
@@ -241,6 +309,11 @@ public final class CommandDeckPlugin extends JavaPlugin {
         @Override
         public boolean isOperator() {
             return game.isOperator(presser);
+        }
+
+        @Override
+        public int coordinates() {
+            return 3;
         }
 
         @Override

@@ -1,0 +1,89 @@
+// One field of a check in the macro editor, under the check's row. The window shows the controls the field
+// needs and hides the rest: #Choice for a comparison, a unit, Item or Tag, or Position, Placeholder or Marker;
+// #Input for text and numbers; #X, #Y and #Z (the game's coordinates) with #Here for a position; #Flag for a
+// yes or no. Nothing on the first line wraps, so it has a fixed height; the hint and a problem wrap under it.
+$C = "../Common.ui";
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Bottom: 4);
+
+  Group {
+    LayoutMode: Left;
+    Anchor: (Height: 40);
+
+    Label #Depth {
+      Text: "";
+      Anchor: (Width: 60, Right: 4);
+    }
+
+    Label #Label {
+      Text: "";
+      Anchor: (Width: 136, Right: 8);
+      Style: (FontSize: 14, TextColor: #c9d1d9, VerticalAlignment: Center, HorizontalAlignment: End);
+    }
+
+    $C.@DropdownBox #Choice {
+      Anchor: (Width: 130, Height: 32, Top: 4, Right: 8);
+
+      Style: (
+        ...$C.@DefaultDropdownBoxStyle,
+        LabelStyle: (...$C.@DefaultDropdownBoxLabelStyle, RenderUppercase: false),
+        EntryLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, RenderUppercase: false),
+        NoItemsLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, TextColor: #b7cedd(0.5), RenderUppercase: false),
+        SelectedEntryLabelStyle: (...$C.@DefaultDropdownBoxEntryLabelStyle, RenderBold: true, RenderUppercase: false)
+      );
+    }
+
+    $C.@TextField #Input {
+      @Anchor = (Right: 8);
+      FlexWeight: 1;
+    }
+
+    $C.@TextField #X {
+      @Anchor = (Width: 90, Right: 4);
+    }
+
+    $C.@TextField #Y {
+      @Anchor = (Width: 90, Right: 4);
+    }
+
+    $C.@TextField #Z {
+      @Anchor = (Width: 90, Right: 4);
+    }
+
+    Group {
+      Anchor: (Width: 30, Right: 4);
+
+      $C.@CheckBox #Flag {
+        Anchor: (Width: 26, Height: 26, Left: 0, Top: 7);
+      }
+    }
+
+    $C.@SmallSecondaryTextButton #Here {
+      @Text = "Here";
+      @Anchor = (Width: 64, Top: 4);
+      Padding: (Horizontal: 0);
+    }
+  }
+
+  // Under the field, indented to the controls, as in TextRow: the indent is the group's padding.
+  Group {
+    LayoutMode: Top;
+    Padding: (Left: 208);
+
+    Label #Hint {
+      Text: "";
+      Visible: false;
+      Anchor: (Top: 2);
+      Style: (FontSize: 13, TextColor: #878e9c, Wrap: true);
+    }
+
+    Label #Problem {
+      Text: "";
+      Visible: false;
+      Anchor: (Top: 2);
+      Style: (FontSize: 13, TextColor: #e8a93b, Wrap: true);
+    }
+  }
+}

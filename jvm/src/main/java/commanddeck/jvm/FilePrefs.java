@@ -1,7 +1,6 @@
-package commanddeck.hytale;
+package commanddeck.jvm;
 
-import com.hypixel.hytale.logger.HytaleLogger;
-import commanddeck.hytale.window.Prefs;
+import commanddeck.window.Prefs;
 import commanddeck.json.Json;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Each player's favorites and free-text history, in {@code prefs/<uuid>.json} in the data folder. Read when a
  * player first opens the window, written after each change.
  */
-final class FilePrefs implements Prefs {
+public final class FilePrefs implements Prefs {
     static final int HISTORY = 10;
 
     private static final class One {
@@ -28,10 +27,10 @@ final class FilePrefs implements Prefs {
     }
 
     private final Path dir;
-    private final HytaleLogger log;
+    private final HostLog log;
     private final Map<String, One> players = new ConcurrentHashMap<>();
 
-    FilePrefs(Path dataDir, HytaleLogger log) {
+    public FilePrefs(Path dataDir, HostLog log) {
         this.dir = dataDir.resolve("prefs");
         this.log = log;
     }
@@ -63,7 +62,7 @@ final class FilePrefs implements Prefs {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            log.atWarning().log("[CommandDeck] Can't read %s, starting afresh: %s", f, e.getMessage());
+            log.warn(String.format("[CommandDeck] Can't read %s, starting afresh: %s", f, e.getMessage()));
         }
         return one;
     }
@@ -82,7 +81,7 @@ final class FilePrefs implements Prefs {
             Files.createDirectories(dir);
             FileMacros.writeAtomically(file(presserId), Json.pretty(m) + "\n");
         } catch (IOException e) {
-            log.atWarning().log("[CommandDeck] Can't save %s: %s", file(presserId), e.getMessage());
+            log.warn(String.format("[CommandDeck] Can't save %s: %s", file(presserId), e.getMessage()));
         }
     }
 

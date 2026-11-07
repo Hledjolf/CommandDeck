@@ -1,5 +1,6 @@
-// The macro editor's buttons: add a step of each kind, then Delete, Run and Save. They add up to 786 pixels,
-// inside the right pane's ~806: Save at 170 ran off the window's edge.
+// The macro editor's buttons: add a step of each kind, then Delete, Run and Save. They add up to 800 pixels,
+// inside the right pane's ~806: Save at 170 ran off the window's edge. "+ Call" (1.2) took 4 to 20 pixels from each.
+// "+ Loop" (1.2) took the place of "+ Repeat": it adds a Repeat, which its row's selector makes a While or Until.
 $C = "../Common.ui";
 
 Group {
@@ -8,22 +9,27 @@ Group {
 
   $C.@SmallSecondaryTextButton #AddCommand {
     @Text = "+ Command";
-    @Anchor = (Width: 120, Top: 4, Right: 4);
+    @Anchor = (Width: 116, Top: 4, Right: 4);
   }
 
   $C.@SmallSecondaryTextButton #AddWait {
     @Text = "+ Wait";
-    @Anchor = (Width: 90, Top: 4, Right: 4);
+    @Anchor = (Width: 80, Top: 4, Right: 4);
   }
 
-  $C.@SmallSecondaryTextButton #AddRepeat {
-    @Text = "+ Repeat";
-    @Anchor = (Width: 110, Top: 4, Right: 4);
+  $C.@SmallSecondaryTextButton #AddLoop {
+    @Text = "+ Loop";
+    @Anchor = (Width: 100, Top: 4, Right: 4);
   }
 
   $C.@SmallSecondaryTextButton #AddSequence {
     @Text = "+ Group";
-    @Anchor = (Width: 100, Top: 4, Right: 8);
+    @Anchor = (Width: 92, Top: 4, Right: 4);
+  }
+
+  $C.@SmallSecondaryTextButton #AddCall {
+    @Text = "+ Call";
+    @Anchor = (Width: 80, Top: 4, Right: 8);
   }
 
   Group {
@@ -32,16 +38,16 @@ Group {
 
   $C.@SecondaryTextButton #Delete {
     @Text = "Delete";
-    @Anchor = (Right: 8, Width: 110);
+    @Anchor = (Right: 8, Width: 96);
   }
 
   $C.@SecondaryTextButton #RunMacro {
     @Text = "Run";
-    @Anchor = (Right: 8, Width: 110);
+    @Anchor = (Right: 8, Width: 96);
   }
 
   $C.@TextButton #Save {
     @Text = "Save";
-    @Anchor = (Width: 110);
+    @Anchor = (Width: 100);
   }
 }

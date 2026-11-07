@@ -1,5 +1,6 @@
 package commanddeck.macro;
 
+import commanddeck.json.Json;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +20,8 @@ public final class MacroWriter {
         String version = m.formatVersion() == null ? MacroReader.SUPPORTED : m.formatVersion();
         // A permission or a category needs format 1.1, so a 1.0 document that gains one is written as 1.1.
         if ((m.permission() != null || m.category() != null) && MacroReader.minor(version) < 1) version = "1.1";
+        // And a call or a loop needs 1.2.
+        if (hasCall(m.body()) && MacroReader.minor(version) < 2) version = "1.2";
         out.put("format_version", version);
         out.put("id", m.id());
         out.put("name", m.name());
@@ -58,8 +61,31 @@ public final class MacroWriter {
                 out.put("seconds", w.seconds());
             }
             note = w.note();
+        } else if (n instanceof Node.Loop) {
+            Node.Loop l = (Node.Loop) n;
+            out.put("condition", Json.copy(l.condition()));
+            out.put("body", node(l.body()));
+            if (l.maxIterations() > 0) out.put("max_iterations", l.maxIterations());
+            note = l.note();
+        } else if (n instanceof Node.Call) {
+            // The reference as written; a copied-in body is never saved.
+            Node.Call c = (Node.Call) n;
+            out.put("macro", c.macro());
+            note = c.note();
         }
         if (note != null) out.put("note", note);
         return out;
+    }
+
+    /** Whether the tree has a node from format 1.2: a call or a loop. */
+    private static boolean hasCall(Node n) {
+        if (n instanceof Node.Call || n instanceof Node.Loop) return true;
+        if (n instanceof Node.Repeat) return hasCall(((Node.Repeat) n).body());
+        if (n instanceof Node.Sequence) {
+            for (Node s : ((Node.Sequence) n).steps()) {
+                if (hasCall(s)) return true;
+            }
+        }
+        return false;
     }
 }

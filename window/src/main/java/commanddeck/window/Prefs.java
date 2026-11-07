@@ -1,4 +1,4 @@
-package commanddeck.hytale.window;
+package commanddeck.window;
 
 import java.util.List;
 import java.util.Set;

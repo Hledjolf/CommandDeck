@@ -24,6 +24,13 @@ final class Commands {
             } else if (n instanceof Node.Repeat) {
                 stack.add(((Node.Repeat) n).body());
                 paths.add(path + ".body");
+            } else if (n instanceof Node.Loop) {
+                stack.add(((Node.Loop) n).body());
+                paths.add(path + ".body");
+            } else if (n instanceof Node.Call && ((Node.Call) n).body() != null) {
+                Node.Call c = (Node.Call) n;
+                stack.add(c.body());
+                paths.add(path + ">" + c.ref() + ">body");
             } else if (n instanceof Node.Sequence) {
                 List<Node> steps = ((Node.Sequence) n).steps();
                 for (int i = steps.size() - 1; i >= 0; i--) {
